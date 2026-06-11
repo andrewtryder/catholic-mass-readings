@@ -43,7 +43,7 @@
     "build": "tsc -p tsconfig.build.json",
     "dev": "tsx src/cli.ts",
     "cli": "tsx src/cli.ts",
-    "prepare": "(husky || true) && npm run build",
+    "prepare": "husky",
     "prepack": "npm run build",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",

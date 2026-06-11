@@ -6,10 +6,11 @@ const DEFAULT_HEADERS = {
 /**
  * Create an {@link HttpClient} backed by the platform `fetch` API (or a compatible implementation).
  */
-export function createFetchClient(fetchImpl = fetch) {
+export function createFetchClient(fetchImpl = fetch, options = {}) {
+    const { useDefaultHeaders = true } = options;
     return {
         async get(url) {
-            const response = await fetchImpl(url, { headers: DEFAULT_HEADERS });
+            const response = await fetchImpl(url, useDefaultHeaders ? { headers: DEFAULT_HEADERS } : undefined);
             const text = await response.text();
             return {
                 text,
@@ -19,10 +20,9 @@ export function createFetchClient(fetchImpl = fetch) {
             };
         },
         async head(url) {
-            const response = await fetchImpl(url, {
-                method: "HEAD",
-                headers: DEFAULT_HEADERS,
-            });
+            const response = await fetchImpl(url, useDefaultHeaders
+                ? { method: "HEAD", headers: DEFAULT_HEADERS }
+                : { method: "HEAD" });
             return {
                 text: "",
                 ok: response.ok,

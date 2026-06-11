@@ -68,9 +68,9 @@ https://andrewtryder.github.io/catholic-mass-readings/
 
 ## Live fetching note
 
-USCCB uses bot protection (Varnish challenge pages) that blocks many automated requests. The Python package solves this with `curl_cffi` TLS impersonation; this TypeScript port uses [`impit`](https://www.npmjs.com/package/impit) for the CLI.
+USCCB uses an Obolus proof-of-work bot check (403 challenge page) before serving readings. The CLI solves this automatically: `impit` fetches the challenge, Node computes the SHA-256 proof, then retries with the `X_Obolus_Proof` cookie.
 
-If live requests return 403 in your environment, parsing is still verified against the Python project's HTML fixtures (`npm test`).
+If live requests still fail, parsing is verified against the Python project's HTML fixtures (`npm test`). For local development, use `npm run cli` (not bare `tsx`) so the Obolus solver runs correctly.
 
 ## Development
 
@@ -80,11 +80,7 @@ Requires Node 24 for local development (see `.nvmrc`).
 git clone https://github.com/andrewtryder/catholic-mass-readings.git
 cd catholic-mass-readings
 npm install
-npm run format:check
-npm run lint
-npm run typecheck
-npm run test:coverage
-npm run build
+npm run verify
 npm run docs
 ```
 

@@ -42,8 +42,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "clean": "rm -rf dist",
-    "dev": "tsx src/cli.ts",
-    "cli": "tsx src/cli.ts",
+    "dev": "node --import tsx src/cli.ts",
+    "cli": "node --import tsx src/cli.ts",
     "docs": "typedoc",
     "prepare": "husky",
     "prepack": "npm run build",
@@ -54,7 +54,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "verify": "npm run format:check && npm run lint && npm run typecheck && npm run test:coverage && npm run build"
   },
   "engines": {
     "node": ">=20"

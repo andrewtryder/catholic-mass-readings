@@ -24,8 +24,7 @@
     {
       "matchUpdateTypes": ["major"],
       "groupName": "major dependency updates",
-      "groupSlug": "major-dependencies",
-      "separateMultipleMajor": false
+      "groupSlug": "major-dependencies"
     }
   ]
 }

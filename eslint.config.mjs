@@ -12,6 +12,6 @@ export default tseslint.config(
     },
   },
   {
-    ignores: ["dist/**", "node_modules/**", ".wrangler/**", "coverage/**"],
+    ignores: ["dist/**", "node_modules/**", "coverage/**"],
   }
 );

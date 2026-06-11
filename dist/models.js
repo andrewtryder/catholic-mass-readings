@@ -1,5 +1,6 @@
 import { GOSPEL_CLOSE_REMARKS, GOSPEL_CLOSE_RESPONSE, READING_CLOSE_REMARKS, READING_CLOSE_RESPONSE, READING_TITLE_FMT, SECTION_HEADER_READINGS, DAILY_READING_DEFAULT_MSS_URL_FMT, DAILY_READING_DAWN_MASS_URL_FMT, DAILY_READING_DAY_MASS_URL_FMT, DAILY_READING_NIGHT_MASS_URL_FMT, DAILY_READING_VIGIL_MASS_URL_FMT, DAILY_READING_YEAR_A_MASS_URL_FMT, DAILY_READING_YEAR_B_MASS_URL_FMT, DAILY_READING_YEAR_C_MASS_URL_FMT, } from "./constants.js";
 import { formatUrlDate, getReadingNumber, lookupBook, stripBookAbbreviationsFromText, } from "./utils.js";
+/** Liturgical mass variant for a given date (maps to USCCB URL suffixes). */
 export var MassType;
 (function (MassType) {
     MassType["DEFAULT"] = "";
@@ -12,6 +13,7 @@ export var MassType;
     MassType["YEARC"] = "YEARC";
 })(MassType || (MassType = {}));
 const MASS_TYPE_NAMES = Object.keys(MassType);
+/** Parse a mass type string (case-insensitive). Throws on invalid input. */
 export function parseMassType(value) {
     if (value === "") {
         return MassType.DEFAULT;
@@ -28,6 +30,7 @@ export function parseMassType(value) {
     }
     throw new Error(`Invalid MassType: ${value}`);
 }
+/** Build the USCCB readings URL for a mass type and date. */
 export function massTypeToUrl(type, date) {
     const dateStr = formatUrlDate(date);
     switch (type) {
@@ -51,6 +54,7 @@ export function massTypeToUrl(type, date) {
             throw new Error(`Unsupported MassType: ${type}`);
     }
 }
+/** Category of a liturgical section within a mass (reading, gospel, psalm, etc.). */
 export var SectionType;
 (function (SectionType) {
     SectionType["UNKNOWN"] = "UNKNOWN";
@@ -61,6 +65,7 @@ export var SectionType;
     SectionType["READING"] = "READING";
     SectionType["SEQUENCE"] = "SEQUENCE";
 })(SectionType || (SectionType = {}));
+/** Infer section type from the USCCB section header text. */
 export function sectionTypeFromHeader(header) {
     const lower = header.toLowerCase();
     if (lower.includes("alleluia"))
@@ -179,6 +184,7 @@ export function massDateStr(mass) {
         year: "numeric",
     });
 }
+/** Format a mass as human-readable text for CLI or logging. */
 export function massToString(mass, format = "full") {
     const lines = [mass.title, massDateStr(mass), mass.url];
     for (const section of mass.sections) {
@@ -186,6 +192,7 @@ export function massToString(mass, format = "full") {
     }
     return lines.join("\n");
 }
+/** Serialize a mass to a JSON-friendly object. */
 export function massToDict(mass, format = "full") {
     const result = {
         url: mass.url,

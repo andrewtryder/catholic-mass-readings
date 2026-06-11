@@ -1,0 +1,10 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": ["src/index.ts"],
+  "out": "docs",
+  "exclude": ["src/cli.ts", "**/*.test.ts"],
+  "excludePrivate": true,
+  "excludeInternal": true,
+  "readme": "none",
+  "name": "catholic-mass-readings"
+}

@@ -24,6 +24,7 @@ const ROMAN_VALUES: Record<string, number> = {
 let oldTestamentLookup: Map<string, BibleBook> | null = null;
 let newTestamentLookup: Map<string, BibleBook> | null = null;
 
+/** Format a date as `MMDDYY` for USCCB URL paths. */
 export function formatUrlDate(date: Date): string {
   const mm = String(date.getMonth() + 1).padStart(2, "0");
   const dd = String(date.getDate()).padStart(2, "0");
@@ -31,11 +32,13 @@ export function formatUrlDate(date: Date): string {
   return `${mm}${dd}${yy}`;
 }
 
+/** Parse an ISO date string (`YYYY-MM-DD`) into a local `Date`. */
 export function parseIsoDate(value: string): Date {
   const [year, month, day] = value.split("-").map(Number);
   return new Date(year, month - 1, day);
 }
 
+/** Today's date in America/New_York timezone. */
 export function todayInNewYork(): Date {
   const formatter = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/New_York",
@@ -50,6 +53,7 @@ export function todayInNewYork(): Date {
   return new Date(year, month, day);
 }
 
+/** Add calendar days to a date. */
 export function addDays(date: Date, days: number): Date {
   const result = new Date(date);
   result.setDate(result.getDate() + days);
@@ -120,6 +124,7 @@ export function lookupBook(key: string | null | undefined): BibleBook | null {
   return ntBook ?? null;
 }
 
+/** Parse a USCCB readings URL into `[date, massTypeSuffix]`, or `null` if invalid. */
 export function parseUrl(url: string): [Date, string] | null {
   const match = URL_PATTERN.exec(url);
   if (!match?.groups?.DATE) return null;

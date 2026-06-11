@@ -15,16 +15,19 @@ const ROMAN_VALUES = {
 };
 let oldTestamentLookup = null;
 let newTestamentLookup = null;
+/** Format a date as `MMDDYY` for USCCB URL paths. */
 export function formatUrlDate(date) {
     const mm = String(date.getMonth() + 1).padStart(2, "0");
     const dd = String(date.getDate()).padStart(2, "0");
     const yy = String(date.getFullYear() % 100).padStart(2, "0");
     return `${mm}${dd}${yy}`;
 }
+/** Parse an ISO date string (`YYYY-MM-DD`) into a local `Date`. */
 export function parseIsoDate(value) {
     const [year, month, day] = value.split("-").map(Number);
     return new Date(year, month - 1, day);
 }
+/** Today's date in America/New_York timezone. */
 export function todayInNewYork() {
     const formatter = new Intl.DateTimeFormat("en-US", {
         timeZone: "America/New_York",
@@ -38,6 +41,7 @@ export function todayInNewYork() {
     const day = Number(parts.find((p) => p.type === "day").value);
     return new Date(year, month, day);
 }
+/** Add calendar days to a date. */
 export function addDays(date, days) {
     const result = new Date(date);
     result.setDate(result.getDate() + days);
@@ -107,6 +111,7 @@ export function lookupBook(key) {
     }
     return ntBook ?? null;
 }
+/** Parse a USCCB readings URL into `[date, massTypeSuffix]`, or `null` if invalid. */
 export function parseUrl(url) {
     const match = URL_PATTERN.exec(url);
     if (!match?.groups?.DATE)

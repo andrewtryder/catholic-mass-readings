@@ -21,6 +21,7 @@ import {
   stripBookAbbreviationsFromText,
 } from "./utils.js";
 
+/** Liturgical mass variant for a given date (maps to USCCB URL suffixes). */
 export enum MassType {
   DEFAULT = "",
   DAWN = "DAWN",
@@ -34,6 +35,7 @@ export enum MassType {
 
 const MASS_TYPE_NAMES = Object.keys(MassType) as (keyof typeof MassType)[];
 
+/** Parse a mass type string (case-insensitive). Throws on invalid input. */
 export function parseMassType(value: string): MassType {
   if (value === "") {
     return MassType.DEFAULT;
@@ -51,6 +53,7 @@ export function parseMassType(value: string): MassType {
   throw new Error(`Invalid MassType: ${value}`);
 }
 
+/** Build the USCCB readings URL for a mass type and date. */
 export function massTypeToUrl(type: MassType, date: Date): string {
   const dateStr = formatUrlDate(date);
   switch (type) {
@@ -75,6 +78,7 @@ export function massTypeToUrl(type: MassType, date: Date): string {
   }
 }
 
+/** Category of a liturgical section within a mass (reading, gospel, psalm, etc.). */
 export enum SectionType {
   UNKNOWN = "UNKNOWN",
   ALLELUIA = "ALLELUIA",
@@ -85,6 +89,7 @@ export enum SectionType {
   SEQUENCE = "SEQUENCE",
 }
 
+/** Infer section type from the USCCB section header text. */
 export function sectionTypeFromHeader(header: string): SectionType {
   const lower = header.toLowerCase();
   if (lower.includes("alleluia")) return SectionType.ALLELUIA;
@@ -96,6 +101,7 @@ export function sectionTypeFromHeader(header: string): SectionType {
   return SectionType.UNKNOWN;
 }
 
+/** A Bible verse citation (reference text and link) within a reading. */
 export interface Verse {
   text: string;
   link: string;
@@ -112,6 +118,7 @@ export function verseToDict(verse: Verse): Record<string, unknown> {
   return { text: verse.text, link: verse.link, book: verse.book };
 }
 
+/** A single reading block with verse citations and full text. */
 export interface Reading {
   verses: Verse[];
   text: string;
@@ -135,6 +142,7 @@ export function readingTitle(reading: Reading): string | null {
   return READING_TITLE_FMT.replace("{TITLE}", bookTitle);
 }
 
+/** Output format: full reading text or verse citations only. */
 export type OutputFormat = "full" | "citations";
 
 export function formatReading(reading: Reading, parent: Section): string {
@@ -171,6 +179,7 @@ export function readingToDict(
   return result;
 }
 
+/** A liturgical section containing one or more readings (e.g. First Reading, Gospel). */
 export interface Section {
   type: SectionType;
   header: string;
@@ -240,6 +249,7 @@ export function sectionToDict(
   };
 }
 
+/** Parsed daily mass readings for a date and liturgical type. */
 export interface Mass {
   date: Date | null;
   type: MassType | string | null;
@@ -257,6 +267,7 @@ export function massDateStr(mass: Mass): string {
   });
 }
 
+/** Format a mass as human-readable text for CLI or logging. */
 export function massToString(
   mass: Mass,
   format: OutputFormat = "full"
@@ -268,6 +279,7 @@ export function massToString(
   return lines.join("\n");
 }
 
+/** Serialize a mass to a JSON-friendly object. */
 export function massToDict(
   mass: Mass,
   format: OutputFormat = "full"

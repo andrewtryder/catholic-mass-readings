@@ -3,6 +3,7 @@ import { OR_PATTERN, SUNDAY_DAY_OF_WEEK } from "./constants.js";
 import { createFetchClient } from "./http.js";
 import { MassType, SectionType, massTypeToUrl, parseMassType, readingWithText, sectionAddAlternative, sectionTypeFromHeader, } from "./models.js";
 import { addDays, getBookFromVerse, parseUrl, todayInNewYork, } from "./utils.js";
+/** Default mass types tried in order when resolving a date without an explicit type. */
 export const DEFAULT_MASS_TYPES = [
     MassType.DAY,
     MassType.YEARA,
@@ -10,19 +11,34 @@ export const DEFAULT_MASS_TYPES = [
     MassType.YEARC,
     MassType.DEFAULT,
 ];
+/**
+ * Client for fetching and parsing USCCB daily mass readings.
+ *
+ * @example
+ * ```ts
+ * import { USCCB, MassType } from "catholic-mass-readings";
+ *
+ * const usccb = new USCCB();
+ * const mass = await usccb.getMass(new Date(2024, 11, 25), MassType.VIGIL);
+ * ```
+ */
 export class USCCB {
     client;
+    /** @param client - HTTP client for fetching pages (defaults to `fetch`). */
     constructor(client = createFetchClient()) {
         this.client = client;
     }
+    /** Today's date in America/New_York (USCCB liturgical calendar). */
     static today() {
         return todayInNewYork();
     }
+    /** Latest date for which USCCB publishes readings (roughly end of next liturgical year). */
     static maxQueryDate() {
         const today = USCCB.today();
         const dt = addDays(new Date(today.getFullYear() + 1, today.getMonth(), 1), 31);
         return new Date(dt.getFullYear(), dt.getMonth(), 1);
     }
+    /** Generate Sunday dates between `start` and `end` (inclusive start, exclusive end). */
     static getSundayMassDates(start, end) {
         if (end !== undefined && start >= end) {
             throw new Error(`Invalid range (${formatIsoDate(start)} >= ${formatIsoDate(end)})`);
@@ -39,6 +55,7 @@ export class USCCB {
         }
         return USCCB.getMassDates(adjustedStart, adjustedEnd, 7);
     }
+    /** Generate dates stepping by `stepDays` from `start` until `end` (capped at {@link maxQueryDate}). */
     static getMassDates(start, end, stepDays = 7) {
         const maxDate = USCCB.maxQueryDate();
         const effectiveEnd = end === undefined
@@ -55,6 +72,7 @@ export class USCCB {
         }
         return dates;
     }
+    /** Fetch today's mass, optionally for a specific {@link MassType}. */
     async getTodayMass(type) {
         const today = USCCB.today();
         if (type !== undefined) {
@@ -62,10 +80,15 @@ export class USCCB {
         }
         return this.getMassFromDate(today);
     }
+    /** Fetch mass for a date and explicit mass type. */
     async getMass(date, type) {
         const url = massTypeToUrl(type, date);
         return this.fetchMass(url, date, type);
     }
+    /**
+     * Fetch mass for a date, trying each type in `types` until one succeeds.
+     * @param types - Mass types to try in order (defaults to {@link DEFAULT_MASS_TYPES}).
+     */
     async getMassFromDate(date, types = DEFAULT_MASS_TYPES) {
         for (const type of types) {
             const url = massTypeToUrl(type, date);
@@ -78,6 +101,7 @@ export class USCCB {
         }
         return null;
     }
+    /** Fetch and parse mass from a USCCB readings URL. */
     async getMassFromUrl(url) {
         let date = null;
         let type = null;
@@ -93,6 +117,7 @@ export class USCCB {
         }
         return this.fetchMass(url, date, type);
     }
+    /** List mass types available for a date (via HEAD requests). */
     async getMassTypes(date) {
         const urlsToType = new Map(Object.values(MassType).map((type) => [massTypeToUrl(type, date), type]));
         const responses = await Promise.all([...urlsToType.keys()].map((url) => this.client.head(url)));
@@ -109,6 +134,10 @@ export class USCCB {
         }
         return this.parseMass(response.text, url, date, type);
     }
+    /**
+     * Parse USCCB HTML into a {@link Mass} object.
+     * Useful for testing with fixture HTML without network requests.
+     */
     parseMass(html, url, date, type) {
         const $ = cheerio.load(html);
         const title = $("title").text().trim().split("|")[0].trim();
@@ -223,6 +252,7 @@ function getElementText($, element) {
     clone.find("br").replaceWith("\n");
     return clone.text();
 }
+/** Normalize whitespace and HTML entities in reading text extracted from USCCB pages. */
 export function cleanText(input) {
     let text = input
         .replace(/\u00a0/g, " ")

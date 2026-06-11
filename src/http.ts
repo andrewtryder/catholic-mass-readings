@@ -1,3 +1,4 @@
+/** HTTP response returned by {@link HttpClient}. */
 export interface HttpResponse {
   text: string;
   ok: boolean;
@@ -5,8 +6,14 @@ export interface HttpResponse {
   url: string;
 }
 
+/**
+ * Pluggable HTTP client used by {@link USCCB} for fetching mass pages.
+ * Inject a custom implementation for testing or TLS impersonation (CLI uses `impit`).
+ */
 export interface HttpClient {
+  /** Fetch a URL with GET. */
   get(url: string): Promise<HttpResponse>;
+  /** Fetch a URL with HEAD (used to probe available mass types). */
   head(url: string): Promise<HttpResponse>;
 }
 
@@ -22,6 +29,9 @@ type FetchLike = (
   init?: RequestInit
 ) => Promise<Pick<Response, "text" | "ok" | "status" | "url">>;
 
+/**
+ * Create an {@link HttpClient} backed by the platform `fetch` API (or a compatible implementation).
+ */
 export function createFetchClient(fetchImpl: FetchLike = fetch): HttpClient {
   return {
     async get(url: string): Promise<HttpResponse> {

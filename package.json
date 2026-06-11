@@ -41,8 +41,10 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "clean": "rm -rf dist",
     "dev": "tsx src/cli.ts",
     "cli": "tsx src/cli.ts",
+    "docs": "typedoc",
     "prepare": "husky",
     "prepack": "npm run build",
     "lint": "eslint .",
@@ -55,7 +57,11 @@
     "test:coverage": "vitest run --coverage"
   },
   "engines": {
-    "node": "24"
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx,mjs,cjs}": [
@@ -86,6 +92,7 @@
     "prettier": "^3.6.2",
     "tsx": "^4.19.4",
     "typescript": "^5.8.3",
+    "typedoc": "^0.28.5",
     "typescript-eslint": "^8.35.1",
     "vitest": "^3.2.1"
   }

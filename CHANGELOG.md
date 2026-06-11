@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.3.2](https://github.com/andrewtryder/catholic-mass-readings/compare/catholic-mass-readings-v0.3.1...catholic-mass-readings-v0.3.2) (2026-06-11)
+
+
+### Bug Fixes
+
+* **cli:** parse obolus config with double-quoted html fixtures ([80bf581](https://github.com/andrewtryder/catholic-mass-readings/commit/80bf581914d758356be5affe10f083429ac9c0e6))
+* **cli:** solve usccb obolus proof-of-work bot check ([50b722b](https://github.com/andrewtryder/catholic-mass-readings/commit/50b722bb96b9b51fb73e9cba1d4f527abfc10fd7))
+* **cli:** solve usccb obolus proof-of-work bot check ([59bafec](https://github.com/andrewtryder/catholic-mass-readings/commit/59bafec4520660f596af6a41fe2f3f8db48e65ef))
+
 ## [0.3.1](https://github.com/andrewtryder/catholic-mass-readings/compare/catholic-mass-readings-v0.3.0...catholic-mass-readings-v0.3.1) (2026-06-11)
 
 

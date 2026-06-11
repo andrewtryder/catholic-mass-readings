@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/andrewtryder/catholic-mass-readings/compare/catholic-mass-readings-v0.3.0...catholic-mass-readings-v0.3.1) (2026-06-11)
+
+
+### Bug Fixes
+
+* **ci:** run npm publish and docs deploy from release-please ([41c2743](https://github.com/andrewtryder/catholic-mass-readings/commit/41c2743862349dfb8cbd789a1abbdc49e6c1c8ef))
+
 ## [0.3.0](https://github.com/andrewtryder/catholic-mass-readings/compare/catholic-mass-readings-v0.2.0...catholic-mass-readings-v0.3.0) (2026-06-11)
 
 

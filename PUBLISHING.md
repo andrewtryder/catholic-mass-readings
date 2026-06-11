@@ -48,16 +48,59 @@ Optional: add required reviewers before publish.
 
 **Settings** → **Pages** → Build and deployment → Source: **GitHub Actions**
 
-API docs deploy from `docs.yml` on each published release.
+API docs deploy from the `docs` job in `release-please.yml` when a release is created.
 
 ### Branch protection (recommended)
 
-Require status checks before merging to `main`:
+The `main` ruleset requires pull requests and these status checks:
 
 - `lint-and-format`
 - `test (20)`, `test (22)`, `test (24)`
 - `build`
-- `Validate PR title`
+
+Optional: add `Validate PR title` from `semantic-pull-request.yml`.
+
+To recreate or update via CLI (replace `RULESET_ID` after `gh api repos/OWNER/REPO/rulesets`):
+
+```bash
+gh api -X PUT repos/andrewtryder/catholic-mass-readings/rulesets/RULESET_ID --input - <<'EOF'
+{
+  "name": "main",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": {
+    "ref_name": { "include": ["~DEFAULT_BRANCH"], "exclude": [] }
+  },
+  "rules": [
+    { "type": "deletion" },
+    { "type": "non_fast_forward" },
+    {
+      "type": "pull_request",
+      "parameters": {
+        "required_approving_review_count": 0,
+        "dismiss_stale_reviews_on_push": true,
+        "require_code_owner_review": false,
+        "require_last_push_approval": false,
+        "required_review_thread_resolution": false
+      }
+    },
+    {
+      "type": "required_status_checks",
+      "parameters": {
+        "strict_required_status_checks_policy": true,
+        "required_status_checks": [
+          { "context": "lint-and-format" },
+          { "context": "build" },
+          { "context": "test (20)" },
+          { "context": "test (22)" },
+          { "context": "test (24)" }
+        ]
+      }
+    }
+  ]
+}
+EOF
+```
 
 ### Actions permissions
 

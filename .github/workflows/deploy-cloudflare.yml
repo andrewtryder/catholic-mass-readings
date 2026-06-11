@@ -1,17 +1,12 @@
 name: Deploy to Cloudflare Workers
 
+# Manual until CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID are configured.
+# To deploy on every push to main, add:
+#   push:
+#     branches: [main]
+#     paths: [src/**, worker/**, wrangler.jsonc, package.json, package-lock.json, tsconfig*.json]
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - "src/**"
-      - "worker/**"
-      - "wrangler.jsonc"
-      - "package.json"
-      - "package-lock.json"
-      - "tsconfig*.json"
-      - ".github/workflows/deploy-cloudflare.yml"
+  workflow_dispatch:
 
 concurrency:
   group: deploy-${{ github.ref }}

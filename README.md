@@ -120,12 +120,12 @@ npx wrangler deploy --dry-run
 
 ### CI/CD (GitHub Actions)
 
-| Workflow                    | Trigger        | Purpose                                                  |
-| --------------------------- | -------------- | -------------------------------------------------------- |
-| `ci.yml`                    | Pull request   | format, lint, typecheck, coverage, build, Worker dry-run |
-| `semantic-pull-request.yml` | Pull request   | PR title must be Conventional Commits                    |
-| `release-please.yml`        | Push to `main` | Opens/updates Release PR with changelog                  |
-| `deploy-cloudflare.yml`     | Push to `main` | Deploy Worker via `wrangler deploy`                      |
+| Workflow                    | Trigger        | Purpose                                                                |
+| --------------------------- | -------------- | ---------------------------------------------------------------------- |
+| `ci.yml`                    | Pull request   | format, lint, typecheck, coverage, build, Worker dry-run               |
+| `semantic-pull-request.yml` | Pull request   | PR title must be Conventional Commits                                  |
+| `release-please.yml`        | Push to `main` | Opens/updates Release PR with changelog                                |
+| `deploy-cloudflare.yml`     | Manual         | Deploy Worker via `wrangler deploy` (enable push when secrets are set) |
 
 ### GitHub repo settings
 
@@ -133,9 +133,11 @@ npx wrangler deploy --dry-run
 - Actions → allow workflows to **create and approve pull requests** (for release-please)
 - Optional branch protection: require `lint-and-format`, `build`, `Validate PR title`
 
-### Cloudflare deploy secrets
+### Cloudflare deploy (optional)
 
-Add these repository secrets for `deploy-cloudflare.yml`:
+Deploy is **manual** until secrets are configured (`Actions` → `Deploy to Cloudflare Workers` → `Run workflow`).
+
+When ready, add repository secrets and re-enable push deploy in `.github/workflows/deploy-cloudflare.yml`:
 
 - `CLOUDFLARE_API_TOKEN` — Workers Scripts Edit (+ Account read)
 - `CLOUDFLARE_ACCOUNT_ID` — from the Cloudflare dashboard URL

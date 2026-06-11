@@ -42,8 +42,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "clean": "rm -rf dist",
-    "dev": "tsx src/cli.ts",
-    "cli": "tsx src/cli.ts",
+    "dev": "node --import tsx src/cli.ts",
+    "cli": "node --import tsx src/cli.ts",
     "docs": "typedoc",
     "prepare": "husky",
     "prepack": "npm run build",

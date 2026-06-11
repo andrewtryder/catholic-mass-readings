@@ -19,6 +19,8 @@ type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<
 /**
  * Create an {@link HttpClient} backed by the platform `fetch` API (or a compatible implementation).
  */
-export declare function createFetchClient(fetchImpl?: FetchLike): HttpClient;
+export declare function createFetchClient(fetchImpl?: FetchLike, options?: {
+    useDefaultHeaders?: boolean;
+}): HttpClient;
 export {};
 //# sourceMappingURL=http.d.ts.map

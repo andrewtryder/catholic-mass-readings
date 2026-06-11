@@ -32,10 +32,18 @@ type FetchLike = (
 /**
  * Create an {@link HttpClient} backed by the platform `fetch` API (or a compatible implementation).
  */
-export function createFetchClient(fetchImpl: FetchLike = fetch): HttpClient {
+export function createFetchClient(
+  fetchImpl: FetchLike = fetch,
+  options: { useDefaultHeaders?: boolean } = {}
+): HttpClient {
+  const { useDefaultHeaders = true } = options;
+
   return {
     async get(url: string): Promise<HttpResponse> {
-      const response = await fetchImpl(url, { headers: DEFAULT_HEADERS });
+      const response = await fetchImpl(
+        url,
+        useDefaultHeaders ? { headers: DEFAULT_HEADERS } : undefined
+      );
       const text = await response.text();
       return {
         text,
@@ -45,10 +53,12 @@ export function createFetchClient(fetchImpl: FetchLike = fetch): HttpClient {
       };
     },
     async head(url: string): Promise<HttpResponse> {
-      const response = await fetchImpl(url, {
-        method: "HEAD",
-        headers: DEFAULT_HEADERS,
-      });
+      const response = await fetchImpl(
+        url,
+        useDefaultHeaders
+          ? { method: "HEAD", headers: DEFAULT_HEADERS }
+          : { method: "HEAD" }
+      );
       return {
         text: "",
         ok: response.ok,

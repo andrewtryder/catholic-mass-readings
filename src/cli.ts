@@ -102,7 +102,9 @@ program
       const usccb = new USCCB(await createNodeHttpClient());
       const mass = await usccb.getMassFromDate(date, types);
       if (!mass) {
-        console.error(`Failed to retrieve mass for ${options.date}`);
+        console.error(
+          `Failed to retrieve mass for ${options.date}. USCCB may have blocked the request (403) or no readings exist for this date.`
+        );
         process.exitCode = 1;
         return;
       }

@@ -10,12 +10,10 @@ Requires Node 24 for local development (see `.nvmrc`). The published package sup
 git clone https://github.com/andrewtryder/catholic-mass-readings.git
 cd catholic-mass-readings
 npm install
-npm run format:check
-npm run lint
-npm run typecheck
-npm run test:coverage
-npm run build
+npm run verify
 ```
+
+`npm run verify` runs the same checks as CI (`format:check`, `lint`, `typecheck`, `test:coverage`, `build`). HTML fixtures under `tests/data/` are excluded from Prettier so scraped pages stay verbatim.
 
 ## Commits and pull requests
 
@@ -33,7 +31,8 @@ Allowed types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `buil
 
 Local hooks (Husky):
 
-- **pre-commit** — ESLint + Prettier on staged files
+- **pre-commit** — ESLint + Prettier on staged files (not the full test suite)
+- **pre-push** — `npm run verify` (mirrors GitHub CI before the remote sees your branch)
 - **commit-msg** — commitlint validates Conventional Commits
 
 ## Releases and npm publishing

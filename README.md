@@ -80,11 +80,7 @@ Requires Node 24 for local development (see `.nvmrc`).
 git clone https://github.com/andrewtryder/catholic-mass-readings.git
 cd catholic-mass-readings
 npm install
-npm run format:check
-npm run lint
-npm run typecheck
-npm run test:coverage
-npm run build
+npm run verify
 npm run docs
 ```
 

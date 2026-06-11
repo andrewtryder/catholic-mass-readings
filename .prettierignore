@@ -4,3 +4,4 @@ coverage
 package-lock.json
 *.min.js
 CHANGELOG.md
+tests/data

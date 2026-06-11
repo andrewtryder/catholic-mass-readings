@@ -1,0 +1,9 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "catholic-mass-readings",
+  "main": "worker/index.ts",
+  "compatibility_date": "2025-06-10",
+  "observability": {
+    "enabled": true,
+  },
+}

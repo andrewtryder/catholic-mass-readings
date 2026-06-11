@@ -37,7 +37,9 @@ export function parseObolusConfig(html: string): ObolusConfig {
   const challengeTimestamp = extractConfigValue(html, "challengeTimestamp");
   const difficultyRaw = extractConfigValue(html, "difficulty");
   const maxTime = Number(extractConfigValue(html, "maxTime") ?? "4000");
-  const benchmarkMatch = html.match(/benchmarkElapsed:\s*parseInt\('(\d+)'/);
+  const benchmarkMatch = html.match(
+    /benchmarkElapsed:\s*parseInt\(['"](\d+)['"]/
+  );
   const benchmarkElapsed = benchmarkMatch ? Number(benchmarkMatch[1]) : 0;
 
   if (!nonce || !challengeToken || !challengeTimestamp || !difficultyRaw) {
@@ -135,11 +137,15 @@ function sha256Hex(input: string): string {
 }
 
 function extractConfigValue(html: string, key: string): string | null {
-  const quoted = html.match(new RegExp(`${key}:\\s*'([^']*)'`));
+  const quoted = html.match(
+    new RegExp(`${key}:\\s*(?:\\n\\s*)?['"]([^'"]*)['"]`)
+  );
   if (quoted) {
     return quoted[1];
   }
-  const numeric = html.match(new RegExp(`${key}:\\s*parseInt\\('(\\d+)'`));
+  const numeric = html.match(
+    new RegExp(`${key}:\\s*parseInt\\(['"](\\d+)['"]`)
+  );
   return numeric ? numeric[1] : null;
 }
 

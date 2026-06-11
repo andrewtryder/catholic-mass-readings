@@ -15,14 +15,12 @@ export function parseObolusConfig(html) {
     const challengeTimestamp = extractConfigValue(html, "challengeTimestamp");
     const difficultyRaw = extractConfigValue(html, "difficulty");
     const maxTime = Number(extractConfigValue(html, "maxTime") ?? "4000");
-    const benchmarkMatch = html.match(/benchmarkElapsed:\s*parseInt\('(\d+)'/);
+    const benchmarkMatch = html.match(/benchmarkElapsed:\s*parseInt\(['"](\d+)['"]/);
     const benchmarkElapsed = benchmarkMatch ? Number(benchmarkMatch[1]) : 0;
     if (!nonce || !challengeToken || !challengeTimestamp || !difficultyRaw) {
         throw new Error("Failed to parse Obolus challenge configuration");
     }
-    const difficulty = difficultyRaw === "adaptive"
-        ? 14
-        : Number.parseInt(difficultyRaw, 10);
+    const difficulty = difficultyRaw === "adaptive" ? 14 : Number.parseInt(difficultyRaw, 10);
     return {
         nonce,
         challengeToken,
@@ -95,11 +93,11 @@ function sha256Hex(input) {
     return createHash("sha256").update(input).digest("hex");
 }
 function extractConfigValue(html, key) {
-    const quoted = html.match(new RegExp(`${key}:\\s*'([^']*)'`));
+    const quoted = html.match(new RegExp(`${key}:\\s*(?:\\n\\s*)?['"]([^'"]*)['"]`));
     if (quoted) {
         return quoted[1];
     }
-    const numeric = html.match(new RegExp(`${key}:\\s*parseInt\\('(\\d+)'`));
+    const numeric = html.match(new RegExp(`${key}:\\s*parseInt\\(['"](\\d+)['"]`));
     return numeric ? numeric[1] : null;
 }
 async function yieldToEventLoop() {

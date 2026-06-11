@@ -1,0 +1,11 @@
+# Git Commits
+
+Use Conventional Commits: `<type>(<scope>): <subject>`
+
+Allowed types: feat, fix, docs, style, refactor, perf, test, build, ci, chore
+
+- Subject: imperative, lowercase, header <= 72 chars
+- Squash-merge PRs into main
+- PR titles must follow Conventional Commits (enforced in CI)
+- Local: Husky commit-msg runs commitlint
+- CI: semantic PR title validation in .github/workflows/semantic-pull-request.yml

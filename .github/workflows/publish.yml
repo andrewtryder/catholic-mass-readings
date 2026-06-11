@@ -1,8 +1,7 @@
+# Manual fallback — automatic publish runs in release-please.yml when a release is created.
 name: Publish to npm
 
 on:
-  release:
-    types: [published]
   workflow_dispatch:
 
 permissions:

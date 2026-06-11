@@ -42,8 +42,8 @@ Releases are automated with [release-please](https://github.com/googleapis/relea
 
 1. Conventional commits on `main` update a Release PR (version bump + `CHANGELOG.md`)
 2. Merging the Release PR creates a GitHub Release and tag
-3. The `publish.yml` workflow publishes to npm via OIDC trusted publishing
-4. The `docs.yml` workflow deploys TypeDoc to GitHub Pages
+3. The `release-please.yml` workflow publishes to npm via OIDC trusted publishing
+4. The same workflow deploys TypeDoc to GitHub Pages
 
 See [PUBLISHING.md](PUBLISHING.md) for one-time npm and GitHub setup.
 

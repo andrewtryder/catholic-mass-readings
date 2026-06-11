@@ -1,8 +1,7 @@
+# Manual fallback — automatic docs deploy runs in release-please.yml when a release is created.
 name: Deploy API docs
 
 on:
-  release:
-    types: [published]
   workflow_dispatch:
 
 permissions:

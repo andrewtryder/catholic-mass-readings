@@ -15,7 +15,8 @@ Trusted Publisher configuration requires an **existing** package on npmjs.com. B
 ```bash
 npm login
 npm run build
-npm publish --access public --provenance
+# Provenance requires GitHub Actions OIDC; disable for local bootstrap only
+npm publish --provenance=false
 ```
 
 Alternatively, use a temporary `NPM_TOKEN` secret for the first `publish.yml` run, then remove it after configuring trusted publishing.
@@ -28,10 +29,12 @@ On [npmjs.com](https://www.npmjs.com/) → **catholic-mass-readings** → **Sett
 | ----------------- | ------------------------------------- |
 | Provider          | GitHub Actions                        |
 | Repository        | `andrewtryder/catholic-mass-readings` |
-| Workflow filename | `publish.yml`                         |
+| Workflow filename | `release-please.yml`                  |
 | Environment       | `release`                             |
 
-The workflow filename and environment must match [.github/workflows/publish.yml](.github/workflows/publish.yml) exactly.
+The workflow filename and environment must match the `publish` job in [.github/workflows/release-please.yml](.github/workflows/release-please.yml) exactly.
+
+If you previously configured `publish.yml`, update the Trusted Publisher workflow filename on npmjs.com.
 
 ## 3. GitHub repository settings
 
@@ -69,8 +72,8 @@ Install the [Renovate GitHub App](https://github.com/apps/renovate) on the repos
 1. Merge conventional commits to `main`
 2. release-please opens/updates a Release PR
 3. Review and merge the Release PR
-4. GitHub Release is created → `publish.yml` publishes to npm with provenance
-5. `docs.yml` deploys TypeDoc to GitHub Pages
+4. GitHub Release is created → `release-please.yml` publishes to npm with provenance
+5. The same workflow deploys TypeDoc to GitHub Pages
 
 ## Troubleshooting OIDC publish
 

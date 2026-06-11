@@ -96,9 +96,9 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for commit conventions and PR workflow.
 | --------------------------- | -------------- | ------------------------------------------ |
 | `ci.yml`                    | Pull request   | format, lint, typecheck, coverage, build   |
 | `semantic-pull-request.yml` | Pull request   | PR title must be Conventional Commits      |
-| `release-please.yml`        | Push to `main` | Opens/updates Release PR with changelog    |
-| `publish.yml`               | GitHub Release | Publishes to npm (OIDC trusted publishing) |
-| `docs.yml`                  | GitHub Release | Deploys TypeDoc to GitHub Pages            |
+| `release-please.yml`        | Push to `main` | Release PR; on merge publishes npm + docs  |
+| `publish.yml`               | Manual         | Fallback npm publish (`workflow_dispatch`) |
+| `docs.yml`                  | Manual         | Fallback docs deploy (`workflow_dispatch`) |
 | `codeql.yml`                | PR + schedule  | Security static analysis                   |
 | `dependency-review.yml`     | Pull request   | Flags vulnerable dependency changes        |
 

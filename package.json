@@ -1,6 +1,6 @@
 {
   "name": "catholic-mass-readings",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "API and CLI for querying Daily Mass readings from bible.usccb.org",
   "type": "module",
   "license": "Apache-2.0",

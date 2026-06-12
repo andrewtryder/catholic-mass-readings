@@ -1,54 +1,138 @@
 import { isObolusChallenge, solveObolusChallenge } from "./obolus.js";
 
 const PROOF_COOKIE_NAME = "X_Obolus_Proof";
+const MAX_OBOLUS_ATTEMPTS = 2;
 
 type FetchLike = (
   input: string | URL | Request,
   init?: RequestInit
 ) => Promise<Pick<Response, "text" | "ok" | "status" | "url">>;
 
-/**
- * Wrap a fetch implementation to automatically solve USCCB Obolus bot-check
- * challenges and retry with the proof cookie.
- *
- * After solving, subsequent requests use plain `fetch` because `impit` does not
- * reliably forward proof cookies.
- */
+let proofCookie: string | null = null;
+let solveInFlight: Promise<void> | null = null;
+
+/** Wrap a fetch implementation with USCCB-specific retry handling for live requests. */
 export function wrapFetchWithObolus(fetchImpl: FetchLike): FetchLike {
-  let proofCookie: string | null = null;
-
   return async (input, init) => {
-    const url = typeof input === "string" ? input : input.toString();
     const method = init?.method ?? "GET";
-    const initialFetch = proofCookie ? fetch : fetchImpl;
-
-    const response = await initialFetch(input, withCookie(init, proofCookie));
-
-    if (response.status !== 403) {
-      return response;
-    }
-
     if (method === "HEAD") {
-      const challengeResponse = await fetchImpl(
-        url,
-        withCookie({ method: "GET" }, proofCookie)
-      );
-      const challengeBody = await challengeResponse.text();
-      if (!isObolusChallenge(challengeBody)) {
-        return response;
-      }
-      proofCookie = await solveObolusChallenge(challengeBody);
-      return fetch(input, withCookie(init, proofCookie));
+      return fetchHeadWithObolus(fetchImpl, input, init);
+    }
+    return fetchGetWithObolus(fetchImpl, input, init);
+  };
+}
+
+/** Reset cached proof state (for tests and recovery retries). */
+export function resetObolusState(): void {
+  proofCookie = null;
+  solveInFlight = null;
+}
+
+async function fetchGetWithObolus(
+  fetchImpl: FetchLike,
+  input: string | URL | Request,
+  init?: RequestInit
+): Promise<Pick<Response, "text" | "ok" | "status" | "url">> {
+  let lastResponse: Pick<Response, "text" | "ok" | "status" | "url"> | null =
+    null;
+  let lastText = "";
+
+  for (let attempt = 0; attempt < MAX_OBOLUS_ATTEMPTS; attempt++) {
+    if (attempt > 0) {
+      resetObolusState();
     }
 
+    const response = await fetchImpl(input, withCookie(init, proofCookie));
     const text = await response.text();
+    lastResponse = response;
+    lastText = text;
+
     if (!isObolusChallenge(text)) {
       return createTextResponse(response, text);
     }
 
-    proofCookie = await solveObolusChallenge(text);
-    return fetch(input, withCookie(init, proofCookie));
-  };
+    await solveChallengeAndCache(text);
+
+    const retry = await fetchImpl(input, withCookie(init, proofCookie));
+    const retryText = await retry.text();
+    lastResponse = retry;
+    lastText = retryText;
+
+    if (!isObolusChallenge(retryText)) {
+      return createTextResponse(retry, retryText);
+    }
+  }
+
+  return createTextResponse(lastResponse!, lastText);
+}
+
+async function fetchHeadWithObolus(
+  fetchImpl: FetchLike,
+  input: string | URL | Request,
+  init?: RequestInit
+): Promise<Pick<Response, "text" | "ok" | "status" | "url">> {
+  const url = typeof input === "string" ? input : input.toString();
+  let lastResponse: Pick<Response, "text" | "ok" | "status" | "url"> | null =
+    null;
+
+  for (let attempt = 0; attempt < MAX_OBOLUS_ATTEMPTS; attempt++) {
+    if (attempt > 0) {
+      resetObolusState();
+    }
+
+    const response = await fetchImpl(input, withCookie(init, proofCookie));
+    lastResponse = response;
+    if (response.ok || response.status !== 403) {
+      return response;
+    }
+
+    const challengeResponse = await fetchImpl(
+      url,
+      withCookie({ method: "GET" }, proofCookie)
+    );
+    const challengeBody = await challengeResponse.text();
+    if (!isObolusChallenge(challengeBody)) {
+      return response;
+    }
+
+    await solveChallengeAndCache(challengeBody);
+
+    const retry = await fetchImpl(input, withCookie(init, proofCookie));
+    lastResponse = retry;
+    if (retry.ok) {
+      return retry;
+    }
+    if (retry.status !== 403) {
+      return retry;
+    }
+
+    const verifyResponse = await fetchImpl(
+      url,
+      withCookie({ method: "GET" }, proofCookie)
+    );
+    const verifyBody = await verifyResponse.text();
+    if (!isObolusChallenge(verifyBody)) {
+      return retry;
+    }
+  }
+
+  return lastResponse!;
+}
+
+async function solveChallengeAndCache(challengeHtml: string): Promise<void> {
+  if (proofCookie) {
+    return;
+  }
+
+  if (!solveInFlight) {
+    solveInFlight = (async () => {
+      proofCookie = await solveObolusChallenge(challengeHtml);
+    })().finally(() => {
+      solveInFlight = null;
+    });
+  }
+
+  await solveInFlight;
 }
 
 function createTextResponse(
@@ -65,15 +149,15 @@ function createTextResponse(
 
 function withCookie(
   init: RequestInit | undefined,
-  proofCookie: string | null
+  cookie: string | null
 ): RequestInit {
-  if (!proofCookie) {
+  if (!cookie) {
     return init ?? {};
   }
 
   const headers = new Headers(init?.headers);
   const existing = headers.get("Cookie");
-  const cookie = `${PROOF_COOKIE_NAME}=${proofCookie}`;
-  headers.set("Cookie", existing ? `${existing}; ${cookie}` : cookie);
+  const proof = `${PROOF_COOKIE_NAME}=${cookie}`;
+  headers.set("Cookie", existing ? `${existing}; ${proof}` : proof);
   return { ...init, headers };
 }

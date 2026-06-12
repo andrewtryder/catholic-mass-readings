@@ -3,8 +3,9 @@ import { createHash } from "node:crypto";
 const PROOF_COOKIE_NAME = "X_Obolus_Proof";
 const BENCHMARK_ITERATIONS = 4096;
 const SAFETY_TIMEOUT_MS = 30_000;
+const BASELINE_DIFFICULTY = 12;
 
-/** Parsed Obolus challenge parameters embedded in USCCB 403 pages. */
+/** Parsed challenge parameters from USCCB error pages. */
 export interface ObolusConfig {
   nonce: string;
   challengeToken: string;
@@ -12,16 +13,18 @@ export interface ObolusConfig {
   difficulty: number;
   benchmarkElapsed: number;
   maxTime: number;
+  /** Challenge mode from the USCCB page (e.g. `aggressive`). */
+  mode: string;
 }
 
-/** Result of solving an Obolus proof-of-work challenge. */
+/** Result of solving a USCCB access challenge. */
 export interface ObolusProofResult {
   benchmarkElapsed: number;
   miningNonce: number;
   found: boolean;
 }
 
-/** Whether an HTTP response body is a USCCB Obolus bot-check page. */
+/** Whether an HTTP response body is a USCCB access challenge page. */
 export function isObolusChallenge(html: string): boolean {
   return (
     html.includes(PROOF_COOKIE_NAME) &&
@@ -30,12 +33,13 @@ export function isObolusChallenge(html: string): boolean {
   );
 }
 
-/** Extract Obolus challenge config from a challenge HTML page. */
+/** Extract challenge config from a challenge HTML page. */
 export function parseObolusConfig(html: string): ObolusConfig {
   const nonce = extractConfigValue(html, "nonce");
   const challengeToken = extractConfigValue(html, "challengeToken");
   const challengeTimestamp = extractConfigValue(html, "challengeTimestamp");
   const difficultyRaw = extractConfigValue(html, "difficulty");
+  const mode = extractConfigValue(html, "mode") ?? "default";
   const maxTime = Number(extractConfigValue(html, "maxTime") ?? "4000");
   const benchmarkMatch = html.match(
     /benchmarkElapsed:\s*parseInt\(['"](\d+)['"]/
@@ -56,10 +60,23 @@ export function parseObolusConfig(html: string): ObolusConfig {
     difficulty,
     benchmarkElapsed,
     maxTime,
+    mode,
   };
 }
 
-/** Count leading zero bits in a hex digest (matches browser Obolus implementation). */
+/** Compute adaptive challenge difficulty from benchmark timing. */
+export function calculateAdaptiveDifficulty(
+  benchmarkElapsed: number,
+  maxTime: number
+): number {
+  const hashesPerMs = BENCHMARK_ITERATIONS / benchmarkElapsed;
+  const targetTime = maxTime * 0.75;
+  const expectedAttempts = targetTime * hashesPerMs;
+  const rawDifficulty = Math.log2(expectedAttempts);
+  return Math.max(12, Math.min(18, Math.floor(rawDifficulty)));
+}
+
+/** Count leading zero bits in a hex digest. */
 export function countLeadingZeroBits(hexString: string): number {
   let count = 0;
   for (const char of hexString) {
@@ -74,9 +91,10 @@ export function countLeadingZeroBits(hexString: string): number {
   return count;
 }
 
-/** Solve the Obolus SHA-256 proof-of-work challenge. */
+/** Solve a USCCB access challenge. */
 export async function computeObolusProof(
-  config: ObolusConfig
+  config: ObolusConfig,
+  options: { forceDifficulty?: number } = {}
 ): Promise<ObolusProofResult> {
   const startTime = Date.now();
   let benchmarkElapsed = config.benchmarkElapsed;
@@ -89,7 +107,11 @@ export async function computeObolusProof(
     benchmarkElapsed = Date.now() - benchmarkStart;
   }
 
-  const targetBits = config.difficulty;
+  const targetBits = resolveTargetDifficulty(
+    config,
+    benchmarkElapsed,
+    options.forceDifficulty
+  );
   let nonce = 0;
   let miningNonce = 0;
   let found = false;
@@ -114,7 +136,7 @@ export async function computeObolusProof(
   return { benchmarkElapsed, miningNonce, found };
 }
 
-/** Build the `X_Obolus_Proof` cookie value from a solved challenge. */
+/** Build the proof cookie value from a solved challenge. */
 export function buildObolusProofCookie(
   config: ObolusConfig,
   result: ObolusProofResult
@@ -122,14 +144,37 @@ export function buildObolusProofCookie(
   return `${config.challengeTimestamp}:${config.nonce}:${config.challengeToken}:${result.benchmarkElapsed}:${result.miningNonce}`;
 }
 
-/** Parse challenge HTML, solve PoW, and return the proof cookie value. */
+/** Parse challenge HTML, solve it, and return the proof cookie value. */
 export async function solveObolusChallenge(html: string): Promise<string> {
   const config = parseObolusConfig(html);
-  const result = await computeObolusProof(config);
+  let result = await computeObolusProof(config);
+
+  if (!result.found && config.mode === "aggressive") {
+    result = await computeObolusProof(config, {
+      forceDifficulty: BASELINE_DIFFICULTY,
+    });
+  }
+
   if (!result.found) {
     throw new Error("Obolus proof-of-work timed out");
   }
   return buildObolusProofCookie(config, result);
+}
+
+function resolveTargetDifficulty(
+  config: ObolusConfig,
+  benchmarkElapsed: number,
+  forceDifficulty?: number
+): number {
+  if (forceDifficulty !== undefined && forceDifficulty > 0) {
+    return forceDifficulty;
+  }
+
+  if (config.mode === "aggressive") {
+    return calculateAdaptiveDifficulty(benchmarkElapsed, config.maxTime);
+  }
+
+  return config.difficulty;
 }
 
 function sha256Hex(input: string): string {

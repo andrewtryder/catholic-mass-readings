@@ -1,4 +1,4 @@
-/** Parsed Obolus challenge parameters embedded in USCCB 403 pages. */
+/** Parsed challenge parameters from USCCB error pages. */
 export interface ObolusConfig {
     nonce: string;
     challengeToken: string;
@@ -6,23 +6,29 @@ export interface ObolusConfig {
     difficulty: number;
     benchmarkElapsed: number;
     maxTime: number;
+    /** Challenge mode from the USCCB page (e.g. `aggressive`). */
+    mode: string;
 }
-/** Result of solving an Obolus proof-of-work challenge. */
+/** Result of solving a USCCB access challenge. */
 export interface ObolusProofResult {
     benchmarkElapsed: number;
     miningNonce: number;
     found: boolean;
 }
-/** Whether an HTTP response body is a USCCB Obolus bot-check page. */
+/** Whether an HTTP response body is a USCCB access challenge page. */
 export declare function isObolusChallenge(html: string): boolean;
-/** Extract Obolus challenge config from a challenge HTML page. */
+/** Extract challenge config from a challenge HTML page. */
 export declare function parseObolusConfig(html: string): ObolusConfig;
-/** Count leading zero bits in a hex digest (matches browser Obolus implementation). */
+/** Compute adaptive challenge difficulty from benchmark timing. */
+export declare function calculateAdaptiveDifficulty(benchmarkElapsed: number, maxTime: number): number;
+/** Count leading zero bits in a hex digest. */
 export declare function countLeadingZeroBits(hexString: string): number;
-/** Solve the Obolus SHA-256 proof-of-work challenge. */
-export declare function computeObolusProof(config: ObolusConfig): Promise<ObolusProofResult>;
-/** Build the `X_Obolus_Proof` cookie value from a solved challenge. */
+/** Solve a USCCB access challenge. */
+export declare function computeObolusProof(config: ObolusConfig, options?: {
+    forceDifficulty?: number;
+}): Promise<ObolusProofResult>;
+/** Build the proof cookie value from a solved challenge. */
 export declare function buildObolusProofCookie(config: ObolusConfig, result: ObolusProofResult): string;
-/** Parse challenge HTML, solve PoW, and return the proof cookie value. */
+/** Parse challenge HTML, solve it, and return the proof cookie value. */
 export declare function solveObolusChallenge(html: string): Promise<string>;
 //# sourceMappingURL=obolus.d.ts.map

@@ -122,6 +122,40 @@ describe("cleanText", () => {
   });
 });
 
+describe("getMassFromDate", () => {
+  it("retries all mass types after resetting fetch state", async () => {
+    const html = readFileSync(
+      join(dataDir, "mass-single-reading.html"),
+      "utf-8"
+    );
+    let calls = 0;
+    const usccb = new USCCB({
+      async get() {
+        calls++;
+        if (calls < 2) {
+          return { text: "", ok: false, status: 403, url: "" };
+        }
+        return {
+          text: html,
+          ok: true,
+          status: 200,
+          url: "https://bible.usccb.org/bible/readings/080625.cfm",
+        };
+      },
+      async head() {
+        return { text: "", ok: false, status: 403, url: "" };
+      },
+    });
+
+    const mass = await usccb.getMassFromDate(parseIsoDate("2025-08-06"), [
+      MassType.DEFAULT,
+    ]);
+
+    expect(mass).not.toBeNull();
+    expect(calls).toBe(2);
+  });
+});
+
 describe("getMassFromUrl", () => {
   it("parses date and type from URL", async () => {
     const usccb = new USCCB(

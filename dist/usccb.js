@@ -1,6 +1,7 @@
 import * as cheerio from "cheerio";
 import { OR_PATTERN, SUNDAY_DAY_OF_WEEK } from "./constants.js";
 import { createFetchClient } from "./http.js";
+import { resetObolusState } from "./http-obolus.js";
 import { MassType, SectionType, massTypeToUrl, parseMassType, readingWithText, sectionAddAlternative, sectionTypeFromHeader, } from "./models.js";
 import { addDays, getBookFromVerse, parseUrl, todayInNewYork, } from "./utils.js";
 /** Default mass types tried in order when resolving a date without an explicit type. */
@@ -90,13 +91,18 @@ export class USCCB {
      * @param types - Mass types to try in order (defaults to {@link DEFAULT_MASS_TYPES}).
      */
     async getMassFromDate(date, types = DEFAULT_MASS_TYPES) {
-        for (const type of types) {
-            const url = massTypeToUrl(type, date);
-            try {
-                return await this.fetchMass(url, date, type);
+        for (let recovery = 0; recovery < 2; recovery++) {
+            if (recovery > 0) {
+                resetObolusState();
             }
-            catch {
-                continue;
+            for (const type of types) {
+                const url = massTypeToUrl(type, date);
+                try {
+                    return await this.fetchMass(url, date, type);
+                }
+                catch {
+                    continue;
+                }
             }
         }
         return null;

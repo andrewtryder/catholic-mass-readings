@@ -53,24 +53,20 @@ catholic-mass-readings get-mass --date 2025-08-06 --citations-only
 ## Library Usage
 
 ```typescript
-import { USCCB, MassType } from "catholic-mass-readings";
+import { USCCB, MassType, createNodeHttpClient } from "catholic-mass-readings";
 
-const usccb = new USCCB();
+const usccb = new USCCB(await createNodeHttpClient());
 const mass = await usccb.getMass(new Date(2024, 11, 25), MassType.VIGIL);
 console.log(mass);
 ```
+
+On Node.js, use `createNodeHttpClient()` for live requests (the CLI does this automatically). Parsing is verified against HTML fixtures in `npm test`.
 
 ## Documentation
 
 API reference (TypeDoc) is published to GitHub Pages after each release:
 
 https://andrewtryder.github.io/catholic-mass-readings/
-
-## Live fetching note
-
-USCCB uses an Obolus proof-of-work bot check (403 challenge page) before serving readings. The CLI solves this automatically: `impit` fetches the challenge, Node computes the SHA-256 proof, then retries with the `X_Obolus_Proof` cookie.
-
-If live requests still fail, parsing is verified against the Python project's HTML fixtures (`npm test`). For local development, use `npm run cli` (not bare `tsx`) so the Obolus solver runs correctly.
 
 ## Development
 

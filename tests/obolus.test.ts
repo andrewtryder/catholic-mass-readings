@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildObolusProofCookie,
+  calculateAdaptiveDifficulty,
   computeObolusProof,
   countLeadingZeroBits,
   isObolusChallenge,
@@ -31,6 +32,12 @@ describe("Obolus challenge", () => {
     expect(config.challengeToken).toMatch(/^[a-f0-9]+$/);
     expect(config.challengeTimestamp).toMatch(/^\d+$/);
     expect(config.difficulty).toBe(14);
+    expect(config.mode).toBe("aggressive");
+  });
+
+  it("uses adaptive difficulty for aggressive mode", () => {
+    expect(calculateAdaptiveDifficulty(10, 4000)).toBe(18);
+    expect(calculateAdaptiveDifficulty(100, 4000)).toBe(16);
   });
 
   it("counts leading zero bits in hex digests", () => {
@@ -47,6 +54,7 @@ describe("Obolus challenge", () => {
       difficulty: 4,
       benchmarkElapsed: 10,
       maxTime: 4000,
+      mode: "default",
     });
 
     expect(result.found).toBe(true);
@@ -58,6 +66,7 @@ describe("Obolus challenge", () => {
         difficulty: 4,
         benchmarkElapsed: 10,
         maxTime: 4000,
+        mode: "default",
       },
       result
     );

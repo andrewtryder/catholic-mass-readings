@@ -4,6 +4,7 @@ import type { Element } from "domhandler";
 import { OR_PATTERN, SUNDAY_DAY_OF_WEEK } from "./constants.js";
 import type { HttpClient } from "./http.js";
 import { createFetchClient } from "./http.js";
+import { resetObolusState } from "./http-obolus.js";
 import {
   MassType,
   SectionType,
@@ -136,12 +137,18 @@ export class USCCB {
     date: Date,
     types: MassType[] = DEFAULT_MASS_TYPES
   ): Promise<Mass | null> {
-    for (const type of types) {
-      const url = massTypeToUrl(type, date);
-      try {
-        return await this.fetchMass(url, date, type);
-      } catch {
-        continue;
+    for (let recovery = 0; recovery < 2; recovery++) {
+      if (recovery > 0) {
+        resetObolusState();
+      }
+
+      for (const type of types) {
+        const url = massTypeToUrl(type, date);
+        try {
+          return await this.fetchMass(url, date, type);
+        } catch {
+          continue;
+        }
       }
     }
     return null;

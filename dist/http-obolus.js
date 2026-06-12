@@ -19,29 +19,25 @@ export function resetObolusState() {
     solveInFlight = null;
 }
 async function fetchGetWithObolus(fetchImpl, input, init) {
-    let lastResponse = null;
-    let lastText = "";
+    let fallback = null;
     for (let attempt = 0; attempt < MAX_OBOLUS_ATTEMPTS; attempt++) {
         if (attempt > 0) {
             resetObolusState();
         }
         const response = await fetchImpl(input, withCookie(init, proofCookie));
         const text = await response.text();
-        lastResponse = response;
-        lastText = text;
         if (!isObolusChallenge(text)) {
             return createTextResponse(response, text);
         }
         await solveChallengeAndCache(text);
         const retry = await fetchImpl(input, withCookie(init, proofCookie));
         const retryText = await retry.text();
-        lastResponse = retry;
-        lastText = retryText;
         if (!isObolusChallenge(retryText)) {
             return createTextResponse(retry, retryText);
         }
+        fallback = { response: retry, text: retryText };
     }
-    return createTextResponse(lastResponse, lastText);
+    return createTextResponse(fallback.response, fallback.text);
 }
 async function fetchHeadWithObolus(fetchImpl, input, init) {
     const url = typeof input === "string" ? input : input.toString();
@@ -51,7 +47,6 @@ async function fetchHeadWithObolus(fetchImpl, input, init) {
             resetObolusState();
         }
         const response = await fetchImpl(input, withCookie(init, proofCookie));
-        lastResponse = response;
         if (response.ok || response.status !== 403) {
             return response;
         }
@@ -62,7 +57,6 @@ async function fetchHeadWithObolus(fetchImpl, input, init) {
         }
         await solveChallengeAndCache(challengeBody);
         const retry = await fetchImpl(input, withCookie(init, proofCookie));
-        lastResponse = retry;
         if (retry.ok) {
             return retry;
         }
@@ -74,6 +68,7 @@ async function fetchHeadWithObolus(fetchImpl, input, init) {
         if (!isObolusChallenge(verifyBody)) {
             return retry;
         }
+        lastResponse = retry;
     }
     return lastResponse;
 }

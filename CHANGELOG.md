@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.3](https://github.com/andrewtryder/catholic-mass-readings/compare/catholic-mass-readings-v0.3.2...catholic-mass-readings-v0.3.3) (2026-06-12)
+
+
+### Bug Fixes
+
+* **ci:** remove invalid renovate major grouping rule ([340d452](https://github.com/andrewtryder/catholic-mass-readings/commit/340d452b695ee798f9a6d01fee823d6202f25e2e))
+* **fetch:** improve live request reliability and sanitize docs ([#13](https://github.com/andrewtryder/catholic-mass-readings/issues/13)) ([9f05c89](https://github.com/andrewtryder/catholic-mass-readings/commit/9f05c894bf656c05d3dd38b65a9c81e0c7f56c25))
+
 ## [0.3.2](https://github.com/andrewtryder/catholic-mass-readings/compare/catholic-mass-readings-v0.3.1...catholic-mass-readings-v0.3.2) (2026-06-11)
 
 

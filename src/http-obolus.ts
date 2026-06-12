@@ -8,6 +8,8 @@ type FetchLike = (
   init?: RequestInit
 ) => Promise<Pick<Response, "text" | "ok" | "status" | "url">>;
 
+type FetchResult = Pick<Response, "text" | "ok" | "status" | "url">;
+
 let proofCookie: string | null = null;
 let solveInFlight: Promise<void> | null = null;
 
@@ -32,10 +34,8 @@ async function fetchGetWithObolus(
   fetchImpl: FetchLike,
   input: string | URL | Request,
   init?: RequestInit
-): Promise<Pick<Response, "text" | "ok" | "status" | "url">> {
-  let lastResponse: Pick<Response, "text" | "ok" | "status" | "url"> | null =
-    null;
-  let lastText = "";
+): Promise<FetchResult> {
+  let fallback: { response: FetchResult; text: string } | null = null;
 
   for (let attempt = 0; attempt < MAX_OBOLUS_ATTEMPTS; attempt++) {
     if (attempt > 0) {
@@ -44,8 +44,6 @@ async function fetchGetWithObolus(
 
     const response = await fetchImpl(input, withCookie(init, proofCookie));
     const text = await response.text();
-    lastResponse = response;
-    lastText = text;
 
     if (!isObolusChallenge(text)) {
       return createTextResponse(response, text);
@@ -55,25 +53,24 @@ async function fetchGetWithObolus(
 
     const retry = await fetchImpl(input, withCookie(init, proofCookie));
     const retryText = await retry.text();
-    lastResponse = retry;
-    lastText = retryText;
 
     if (!isObolusChallenge(retryText)) {
       return createTextResponse(retry, retryText);
     }
+
+    fallback = { response: retry, text: retryText };
   }
 
-  return createTextResponse(lastResponse!, lastText);
+  return createTextResponse(fallback!.response, fallback!.text);
 }
 
 async function fetchHeadWithObolus(
   fetchImpl: FetchLike,
   input: string | URL | Request,
   init?: RequestInit
-): Promise<Pick<Response, "text" | "ok" | "status" | "url">> {
+): Promise<FetchResult> {
   const url = typeof input === "string" ? input : input.toString();
-  let lastResponse: Pick<Response, "text" | "ok" | "status" | "url"> | null =
-    null;
+  let lastResponse: FetchResult | null = null;
 
   for (let attempt = 0; attempt < MAX_OBOLUS_ATTEMPTS; attempt++) {
     if (attempt > 0) {
@@ -81,7 +78,6 @@ async function fetchHeadWithObolus(
     }
 
     const response = await fetchImpl(input, withCookie(init, proofCookie));
-    lastResponse = response;
     if (response.ok || response.status !== 403) {
       return response;
     }
@@ -98,7 +94,6 @@ async function fetchHeadWithObolus(
     await solveChallengeAndCache(challengeBody);
 
     const retry = await fetchImpl(input, withCookie(init, proofCookie));
-    lastResponse = retry;
     if (retry.ok) {
       return retry;
     }
@@ -114,6 +109,8 @@ async function fetchHeadWithObolus(
     if (!isObolusChallenge(verifyBody)) {
       return retry;
     }
+
+    lastResponse = retry;
   }
 
   return lastResponse!;
@@ -138,7 +135,7 @@ async function solveChallengeAndCache(challengeHtml: string): Promise<void> {
 function createTextResponse(
   response: Pick<Response, "ok" | "status" | "url">,
   text: string
-): Pick<Response, "text" | "ok" | "status" | "url"> {
+): FetchResult {
   return {
     ok: response.ok,
     status: response.status,

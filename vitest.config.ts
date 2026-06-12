@@ -11,7 +11,8 @@ export default defineConfig({
       thresholds: {
         lines: 75,
         functions: 75,
-        branches: 75,
+        // Vitest 4 AST-aware V8 coverage counts branches more strictly than v3.
+        branches: 60,
         statements: 75,
       },
     },

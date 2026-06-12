@@ -68,6 +68,22 @@ describe("wrapFetchWithObolus", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
+  it("handles HEAD requests after solving a challenge", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(mockResponse(403, ""))
+      .mockResolvedValueOnce(mockResponse(403, challengeHtml))
+      .mockResolvedValueOnce(mockResponse(200, ""));
+
+    const wrapped = wrapFetchWithObolus(fetchImpl);
+    const response = await wrapped("https://example.test/readings", {
+      method: "HEAD",
+    });
+
+    expect(response.ok).toBe(true);
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+  });
+
   it("clears a rejected proof cookie and solves again", async () => {
     const fetchImpl = vi
       .fn()

@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.4](https://github.com/andrewtryder/catholic-mass-readings/compare/catholic-mass-readings-v0.3.3...catholic-mass-readings-v0.3.4) (2026-06-12)
+
+
+### Bug Fixes
+
+* **deps:** update major dependency updates ([#14](https://github.com/andrewtryder/catholic-mass-readings/issues/14)) ([346ff2b](https://github.com/andrewtryder/catholic-mass-readings/commit/346ff2bae31b4fa5f60f18b8b34f6ef78a2324b0))
+
 ## [0.3.3](https://github.com/andrewtryder/catholic-mass-readings/compare/catholic-mass-readings-v0.3.2...catholic-mass-readings-v0.3.3) (2026-06-12)
 
 

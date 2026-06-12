@@ -1,3 +1,5 @@
+import { wrapFetchWithObolus } from "./http-obolus.js";
+
 /** HTTP response returned by {@link HttpClient}. */
 export interface HttpResponse {
   text: string;
@@ -8,7 +10,7 @@ export interface HttpResponse {
 
 /**
  * Pluggable HTTP client used by {@link USCCB} for fetching mass pages.
- * Inject a custom implementation for testing or TLS impersonation (CLI uses `impit`).
+ * Inject a custom implementation for testing or alternate fetch backends.
  */
 export interface HttpClient {
   /** Fetch a URL with GET. */
@@ -29,18 +31,25 @@ type FetchLike = (
   init?: RequestInit
 ) => Promise<Pick<Response, "text" | "ok" | "status" | "url">>;
 
+export type CreateFetchClientOptions = {
+  useDefaultHeaders?: boolean;
+  /** Apply USCCB-specific fetch handling for live requests (default: true). */
+  obolus?: boolean;
+};
+
 /**
  * Create an {@link HttpClient} backed by the platform `fetch` API (or a compatible implementation).
  */
 export function createFetchClient(
   fetchImpl: FetchLike = fetch,
-  options: { useDefaultHeaders?: boolean } = {}
+  options: CreateFetchClientOptions = {}
 ): HttpClient {
-  const { useDefaultHeaders = true } = options;
+  const { useDefaultHeaders = true, obolus = true } = options;
+  const resolvedFetch = obolus ? wrapFetchWithObolus(fetchImpl) : fetchImpl;
 
   return {
     async get(url: string): Promise<HttpResponse> {
-      const response = await fetchImpl(
+      const response = await resolvedFetch(
         url,
         useDefaultHeaders ? { headers: DEFAULT_HEADERS } : undefined
       );
@@ -53,7 +62,7 @@ export function createFetchClient(
       };
     },
     async head(url: string): Promise<HttpResponse> {
-      const response = await fetchImpl(
+      const response = await resolvedFetch(
         url,
         useDefaultHeaders
           ? { method: "HEAD", headers: DEFAULT_HEADERS }

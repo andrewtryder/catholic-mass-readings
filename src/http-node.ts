@@ -1,16 +1,12 @@
 import { createFetchClient } from "./http.js";
-import { wrapFetchWithObolus } from "./http-obolus.js";
 
 /**
- * Create an HTTP client for Node.js using `impit` TLS impersonation when available.
- * Falls back to plain `fetch` if `impit` is not installed.
- * Automatically solves USCCB Obolus proof-of-work challenges.
+ * Create an HTTP client recommended for live USCCB requests in Node.js.
+ * The CLI uses this by default.
  */
 export async function createNodeHttpClient() {
   const { fetchImpl, useDefaultHeaders } = await createNodeFetch();
-  return createFetchClient(wrapFetchWithObolus(fetchImpl), {
-    useDefaultHeaders,
-  });
+  return createFetchClient(fetchImpl, { useDefaultHeaders });
 }
 
 async function createNodeFetch(): Promise<{

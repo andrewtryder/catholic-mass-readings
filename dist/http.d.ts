@@ -7,7 +7,7 @@ export interface HttpResponse {
 }
 /**
  * Pluggable HTTP client used by {@link USCCB} for fetching mass pages.
- * Inject a custom implementation for testing or TLS impersonation (CLI uses `impit`).
+ * Inject a custom implementation for testing or alternate fetch backends.
  */
 export interface HttpClient {
     /** Fetch a URL with GET. */
@@ -16,11 +16,14 @@ export interface HttpClient {
     head(url: string): Promise<HttpResponse>;
 }
 type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Pick<Response, "text" | "ok" | "status" | "url">>;
+export type CreateFetchClientOptions = {
+    useDefaultHeaders?: boolean;
+    /** Apply USCCB-specific fetch handling for live requests (default: true). */
+    obolus?: boolean;
+};
 /**
  * Create an {@link HttpClient} backed by the platform `fetch` API (or a compatible implementation).
  */
-export declare function createFetchClient(fetchImpl?: FetchLike, options?: {
-    useDefaultHeaders?: boolean;
-}): HttpClient;
+export declare function createFetchClient(fetchImpl?: FetchLike, options?: CreateFetchClientOptions): HttpClient;
 export {};
 //# sourceMappingURL=http.d.ts.map

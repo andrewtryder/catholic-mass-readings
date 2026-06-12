@@ -104,7 +104,35 @@ EOF
 
 ### Actions permissions
 
-Ensure workflows can create and approve pull requests (required for release-please).
+**Settings → Actions → General:**
+
+1. **Workflow permissions** — Read and write (already set).
+2. **Allow GitHub Actions to create and approve pull requests** — enabled (required for release-please).
+
+### `RELEASE_PLEASE_TOKEN` (fixes manual workflow approval)
+
+By default, release-please uses `GITHUB_TOKEN`, which opens Release PRs as `github-actions[bot]`. GitHub then blocks CI on those PRs until you click **Approve workflow runs** — even when you created the preceding feature PR yourself.
+
+Create a fine-grained personal access token:
+
+1. **GitHub → Settings → Developer settings → Fine-grained tokens → Generate**
+2. Repository access: **Only** `andrewtryder/catholic-mass-readings`
+3. Permissions:
+   - **Contents** — Read and write
+   - **Pull requests** — Read and write
+   - **Actions** — Read and write
+   - **Metadata** — Read-only (required)
+4. Add the token as repository secret **`RELEASE_PLEASE_TOKEN`**:
+
+```bash
+gh secret set RELEASE_PLEASE_TOKEN --repo andrewtryder/catholic-mass-readings
+```
+
+After this secret exists, Release PRs are opened/updated under your account and CI runs immediately — no **Approve workflow runs** click.
+
+**Why the earlier repo-settings change did not help:** adjusting fork PR approval policy only affects contributors from _forks_. release-please uses `GITHUB_TOKEN`, so its PRs are opened by `github-actions[bot]` on a branch in this repo. That is a different GitHub safeguard (same as [release-please’s documented limitation](https://github.com/googleapis/release-please-action#other-actions-on-release-please-prs)). A PAT is the supported fix.
+
+Until the secret is set, release-please will fail on the next `main` push. Stale open Release PRs (for example `chore(main): release …` from `github-actions[bot]`) still need a one-time manual **Approve workflow runs** in the GitHub UI, or close them and let release-please open a fresh PR after the secret is configured.
 
 ### Renovate
 

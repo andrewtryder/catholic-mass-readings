@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { USCCBBotChallengeError, USCCBParseError } from "./errors.js";
 
 const PROOF_COOKIE_NAME = "X_Obolus_Proof";
 const BENCHMARK_ITERATIONS = 4096;
@@ -47,7 +48,7 @@ export function parseObolusConfig(html: string): ObolusConfig {
   const benchmarkElapsed = benchmarkMatch ? Number(benchmarkMatch[1]) : 0;
 
   if (!nonce || !challengeToken || !challengeTimestamp || !difficultyRaw) {
-    throw new Error("Failed to parse Obolus challenge configuration");
+    throw new USCCBParseError("Failed to parse Obolus challenge configuration");
   }
 
   const difficulty =
@@ -156,7 +157,7 @@ export async function solveObolusChallenge(html: string): Promise<string> {
   }
 
   if (!result.found) {
-    throw new Error("Obolus proof-of-work timed out");
+    throw new USCCBBotChallengeError("Obolus proof-of-work timed out");
   }
   return buildObolusProofCookie(config, result);
 }

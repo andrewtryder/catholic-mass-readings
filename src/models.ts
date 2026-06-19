@@ -14,6 +14,7 @@ import {
   DAILY_READING_YEAR_B_MASS_URL_FMT,
   DAILY_READING_YEAR_C_MASS_URL_FMT,
 } from "./constants.js";
+import { USCCBArgumentError } from "./errors.js";
 import {
   formatUrlDate,
   getReadingNumber,
@@ -50,7 +51,7 @@ export function parseMassType(value: string): MassType {
       return MassType[name];
     }
   }
-  throw new Error(`Invalid MassType: ${value}`);
+  throw new USCCBArgumentError(`Invalid MassType: ${value}`);
 }
 
 /** Build the USCCB readings URL for a mass type and date. */
@@ -74,7 +75,7 @@ export function massTypeToUrl(type: MassType, date: Date): string {
     case MassType.YEARC:
       return DAILY_READING_YEAR_C_MASS_URL_FMT.replace("{DATE}", dateStr);
     default:
-      throw new Error(`Unsupported MassType: ${type}`);
+      throw new USCCBArgumentError(`Unsupported MassType: ${type}`);
   }
 }
 

@@ -1,10 +1,12 @@
 import { createFetchClient } from "./http.js";
 
+import type { HttpClient } from "./http.js";
+
 /**
  * Create an HTTP client recommended for live USCCB requests in Node.js.
  * The CLI uses this by default.
  */
-export async function createNodeHttpClient() {
+export async function createNodeHttpClient(): Promise<HttpClient> {
   const { fetchImpl, useDefaultHeaders } = await createNodeFetch();
   return createFetchClient(fetchImpl, { useDefaultHeaders });
 }

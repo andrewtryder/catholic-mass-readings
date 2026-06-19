@@ -3,7 +3,8 @@
   "packages": {
     ".": {
       "release-type": "node",
-      "package-name": "catholic-mass-readings"
+      "package-name": "catholic-mass-readings",
+      "include-component-in-tag": false
     }
   }
 }

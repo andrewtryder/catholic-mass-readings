@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.5](https://github.com/andrewtryder/catholic-mass-readings/compare/catholic-mass-readings-v0.3.4...catholic-mass-readings-v0.3.5) (2026-06-19)
+
+
+### Bug Fixes
+
+* improve robustness and error handling ([ccebafd](https://github.com/andrewtryder/catholic-mass-readings/commit/ccebafdde14721b5c1759583a54b5936e8ca70e8))
+* improve robustness and error handling ([80bc4f9](https://github.com/andrewtryder/catholic-mass-readings/commit/80bc4f96531c6fa3130277a79281bbf22e96629b))
+
 ## [0.3.4](https://github.com/andrewtryder/catholic-mass-readings/compare/catholic-mass-readings-v0.3.3...catholic-mass-readings-v0.3.4) (2026-06-12)
 
 

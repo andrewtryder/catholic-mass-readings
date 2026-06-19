@@ -21,8 +21,10 @@ const ROMAN_VALUES: Record<string, number> = {
   M: 1000,
 };
 
-let oldTestamentLookup: Map<string, BibleBook> | null = null;
-let newTestamentLookup: Map<string, BibleBook> | null = null;
+const oldTestamentLookup: Map<string, BibleBook> =
+  buildTestamentBookLookup(OLD_TESTAMENT_BOOKS);
+const newTestamentLookup: Map<string, BibleBook> =
+  buildTestamentBookLookup(NEW_TESTAMENT_BOOKS);
 
 /** Format a date as `MMDDYY` for USCCB URL paths. */
 export function formatUrlDate(date: Date): string {
@@ -113,8 +115,8 @@ function* getBookAbbreviationsFromText(text: string): Generator<string> {
 export function lookupBook(key: string | null | undefined): BibleBook | null {
   if (!key) return null;
   const normalized = key.replace(/\s/g, "").toLowerCase();
-  const ot = getOldTestamentBookLookup();
-  const nt = getNewTestamentBookLookup();
+  const ot = oldTestamentLookup;
+  const nt = newTestamentLookup;
   const otBook = ot.get(normalized);
   const ntBook = nt.get(normalized);
   if (otBook) {
@@ -135,20 +137,6 @@ export function parseUrl(url: string): [Date, string] | null {
   const day = parseInt(parsed[2], 10);
   const year = 2000 + parseInt(parsed[3], 10);
   return [new Date(year, month, day), match.groups.TYPE ?? ""];
-}
-
-function getOldTestamentBookLookup(): Map<string, BibleBook> {
-  if (!oldTestamentLookup) {
-    oldTestamentLookup = buildTestamentBookLookup(OLD_TESTAMENT_BOOKS);
-  }
-  return oldTestamentLookup;
-}
-
-function getNewTestamentBookLookup(): Map<string, BibleBook> {
-  if (!newTestamentLookup) {
-    newTestamentLookup = buildTestamentBookLookup(NEW_TESTAMENT_BOOKS);
-  }
-  return newTestamentLookup;
 }
 
 function buildTestamentBookLookup(books: BibleBook[]): Map<string, BibleBook> {

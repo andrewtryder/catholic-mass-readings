@@ -4,6 +4,9 @@ import type { Element } from "domhandler";
 import { OR_PATTERN, SUNDAY_DAY_OF_WEEK } from "./constants.js";
 import type { HttpClient } from "./http.js";
 import { createFetchClient } from "./http.js";
+import { USCCBArgumentError, USCCBNetworkError } from "./errors.js";
+
+const MAX_RETRIES = 2;
 import { resetObolusState } from "./http-obolus.js";
 import {
   MassType,
@@ -71,7 +74,7 @@ export class USCCB {
   /** Generate Sunday dates between `start` and `end` (inclusive start, exclusive end). */
   static getSundayMassDates(start: Date, end?: Date): Date[] {
     if (end !== undefined && start >= end) {
-      throw new Error(
+      throw new USCCBArgumentError(
         `Invalid range (${formatIsoDate(start)} >= ${formatIsoDate(end)})`
       );
     }
@@ -100,7 +103,7 @@ export class USCCB {
         : new Date(Math.min(end.getTime(), maxDate.getTime()));
 
     if (start >= effectiveEnd) {
-      throw new Error(
+      throw new USCCBArgumentError(
         `Invalid range (${formatIsoDate(start)} >= ${formatIsoDate(effectiveEnd)})`
       );
     }
@@ -137,7 +140,7 @@ export class USCCB {
     date: Date,
     types: MassType[] = DEFAULT_MASS_TYPES
   ): Promise<Mass | null> {
-    for (let recovery = 0; recovery < 2; recovery++) {
+    for (let recovery = 0; recovery < MAX_RETRIES; recovery++) {
       if (recovery > 0) {
         resetObolusState();
       }
@@ -192,7 +195,9 @@ export class USCCB {
   ): Promise<Mass | null> {
     const response = await this.client.get(url);
     if (!response.ok) {
-      throw new Error(`Failed to fetch mass from ${url}: ${response.status}`);
+      throw new USCCBNetworkError(
+        `Failed to fetch mass from ${url}: ${response.status}`
+      );
     }
     return this.parseMass(response.text, url, date, type);
   }

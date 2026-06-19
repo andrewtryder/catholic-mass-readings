@@ -83,7 +83,7 @@
   "devDependencies": {
     "@commitlint/cli": "^21.0.0",
     "@commitlint/config-conventional": "^21.0.0",
-    "@eslint/js": "^10.0.0",
+    "@eslint/js": "^10.0.1",
     "@types/node": "^24.0.0",
     "@vitest/coverage-v8": "^4.0.0",
     "eslint": "^10.0.0",
@@ -92,8 +92,8 @@
     "lint-staged": "^17.0.0",
     "prettier": "^3.6.2",
     "tsx": "^4.19.4",
-    "typescript": "^6.0.0",
     "typedoc": "^0.28.5",
+    "typescript": "^6.0.0",
     "typescript-eslint": "^8.35.1",
     "vitest": "^4.0.0"
   }

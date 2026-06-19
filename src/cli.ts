@@ -14,6 +14,7 @@ import {
 import { createNodeHttpClient } from "./http-node.js";
 import { USCCB } from "./usccb.js";
 import { addDays, parseIsoDate, todayInNewYork } from "./utils.js";
+import { USCCBArgumentError } from "./errors.js";
 
 const DATE_FMT = "YYYY-MM-DD";
 const MASS_TYPE_CHOICES = Object.keys(MassType) as (keyof typeof MassType)[];
@@ -39,7 +40,9 @@ function formatIsoDate(date: Date): string {
 
 function parseDateOption(value: string): Date {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    throw new Error(`Invalid date format: ${value}. Expected ${DATE_FMT}`);
+    throw new USCCBArgumentError(
+      `Invalid date format: ${value}. Expected ${DATE_FMT}`
+    );
   }
   return parseIsoDate(value);
 }
@@ -50,7 +53,7 @@ function parseMassTypes(values: string[] | undefined): MassType[] | undefined {
     try {
       return parseMassType(value);
     } catch {
-      throw new Error(
+      throw new USCCBArgumentError(
         `Invalid mass type '${value}'. Allowed choices are ${MASS_TYPE_CHOICES.join(", ")}.`
       );
     }
@@ -65,6 +68,55 @@ async function writeJson(
   await writeFile(path, JSON.stringify(data, null, 4), "utf-8");
 }
 
+const LOG_LEVELS = {
+  DEBUG: 10,
+  INFO: 20,
+  WARNING: 30,
+  ERROR: 40,
+  CRITICAL: 50,
+  NOTSET: 0,
+};
+
+let currentLogLevel = LOG_LEVELS.INFO;
+
+function setLogLevel(levelName: string) {
+  const level = LOG_LEVELS[levelName as keyof typeof LOG_LEVELS];
+  if (level !== undefined) {
+    currentLogLevel = level;
+  }
+}
+
+const logger = {
+  debug: (...args: unknown[]) => {
+    if (
+      currentLogLevel <= LOG_LEVELS.DEBUG &&
+      currentLogLevel !== LOG_LEVELS.NOTSET
+    )
+      logger.error("[DEBUG]", ...args);
+  },
+  info: (...args: unknown[]) => {
+    if (
+      currentLogLevel <= LOG_LEVELS.INFO &&
+      currentLogLevel !== LOG_LEVELS.NOTSET
+    )
+      logger.error("[INFO]", ...args);
+  },
+  warn: (...args: unknown[]) => {
+    if (
+      currentLogLevel <= LOG_LEVELS.WARNING &&
+      currentLogLevel !== LOG_LEVELS.NOTSET
+    )
+      logger.error("[WARNING]", ...args);
+  },
+  error: (...args: unknown[]) => {
+    if (
+      currentLogLevel <= LOG_LEVELS.ERROR &&
+      currentLogLevel !== LOG_LEVELS.NOTSET
+    )
+      logger.error("[ERROR]", ...args);
+  },
+};
+
 const today = todayInNewYork();
 const todayStr = formatIsoDate(today);
 const weekLaterStr = formatIsoDate(addDays(today, 7));
@@ -78,7 +130,10 @@ const program = new Command()
     new Option("--log-level <level>", "Logging level")
       .choices(["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG", "NOTSET"])
       .default("INFO")
-  );
+  )
+  .hook("preAction", (thisCommand) => {
+    setLogLevel(thisCommand.opts().logLevel);
+  });
 
 program
   .command("get-mass")
@@ -102,7 +157,7 @@ program
       const usccb = new USCCB(await createNodeHttpClient());
       const mass = await usccb.getMassFromDate(date, types);
       if (!mass) {
-        console.error(
+        logger.error(
           `Failed to retrieve mass for ${options.date}. USCCB may have blocked the request (403) or no readings exist for this date.`
         );
         process.exitCode = 1;
@@ -215,6 +270,6 @@ async function printMassRange(
 }
 
 program.parseAsync(process.argv).catch((error: unknown) => {
-  console.error(error);
+  logger.error(error);
   process.exitCode = 1;
 });

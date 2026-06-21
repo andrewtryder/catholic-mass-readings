@@ -19,6 +19,9 @@ import { USCCBArgumentError } from "./errors.js";
 const DATE_FMT = "YYYY-MM-DD";
 const MASS_TYPE_CHOICES = Object.keys(MassType) as (keyof typeof MassType)[];
 const MASS_TYPE_HELP = `${MASS_TYPE_CHOICES.join(", ")} (case-insensitive)`;
+const REVERSE_MASS_TYPE = new Map(
+  Object.entries(MassType).map(([k, v]) => [v, k])
+);
 
 function massTypeOption(): Option {
   return new Option("-t, --type <type...>", `Mass type: ${MASS_TYPE_HELP}`);
@@ -163,10 +166,7 @@ program
     const usccb = new USCCB(await createNodeHttpClient());
     const massTypes = await usccb.getMassTypes(date);
     for (const massType of massTypes) {
-      console.log(
-        Object.entries(MassType).find(([, value]) => value === massType)?.[0] ??
-          massType
-      );
+      console.log(REVERSE_MASS_TYPE.get(massType) ?? massType);
     }
   });
 

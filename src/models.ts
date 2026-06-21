@@ -36,20 +36,21 @@ export enum MassType {
 
 const MASS_TYPE_NAMES = Object.keys(MassType) as (keyof typeof MassType)[];
 
+const massTypeCache = new Map<string, MassType>();
+for (const name of MASS_TYPE_NAMES) {
+  massTypeCache.set(name.toLowerCase(), MassType[name]);
+  massTypeCache.set(MassType[name].toLowerCase(), MassType[name]);
+}
+
 /** Parse a mass type string (case-insensitive). Throws on invalid input. */
 export function parseMassType(value: string): MassType {
   if (value === "") {
     return MassType.DEFAULT;
   }
-  for (const name of MASS_TYPE_NAMES) {
-    if (name.toLowerCase() === value.toLowerCase()) {
-      return MassType[name];
-    }
-  }
-  for (const name of MASS_TYPE_NAMES) {
-    if (MassType[name].toLowerCase() === value.toLowerCase()) {
-      return MassType[name];
-    }
+  const lowerValue = value.toLowerCase();
+  const match = massTypeCache.get(lowerValue);
+  if (match !== undefined) {
+    return match;
   }
   throw new USCCBArgumentError(`Invalid MassType: ${value}`);
 }

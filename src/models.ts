@@ -139,9 +139,11 @@ export function readingHeader(reading: Reading): string {
 }
 
 export function readingTitle(reading: Reading): string | null {
-  const bookTitle = reading.verses.map(verseBookTitle).find((t) => t) ?? null;
-  if (!bookTitle) return null;
-  return READING_TITLE_FMT.replace("{TITLE}", bookTitle);
+  for (const verse of reading.verses) {
+    const bookTitle = verseBookTitle(verse);
+    if (bookTitle) return READING_TITLE_FMT.replace("{TITLE}", bookTitle);
+  }
+  return null;
 }
 
 /** Output format: full reading text or verse citations only. */

@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/andrewtryder/catholic-mass-readings/compare/v0.4.0...v0.4.1) (2026-07-20)
+
+
+### Bug Fixes
+
+* address range semantics, verse fallbacks, and probe resilience ([f01328b](https://github.com/andrewtryder/catholic-mass-readings/commit/f01328ba36a91d3446bcd59b2d1eeab9e65d2e11))
+
 ## [0.4.0](https://github.com/andrewtryder/catholic-mass-readings/compare/v0.3.5...v0.4.0) (2026-07-20)
 
 

@@ -174,16 +174,34 @@ export function lookupBook(key: string | null | undefined): BibleBook | null {
 }
 
 /** Parse a USCCB readings URL into `[date, massTypeSuffix]`, or `null` if invalid. */
-export function parseUrl(url: string): [Date, string] | null {
-  const match = URL_PATTERN.exec(url);
+export function parseUrl(rawUrl: string): [Date, string] | null {
+  let pathname: string;
+  try {
+    pathname = new URL(rawUrl).pathname;
+  } catch {
+    pathname = rawUrl;
+  }
+
+  const match = URL_PATTERN.exec(pathname);
   if (!match?.groups?.DATE) return null;
-  const dateStr = match.groups.DATE;
-  const parsed = DATE_FMT.exec(dateStr);
+
+  const parsed = DATE_FMT.exec(match.groups.DATE);
   if (!parsed) return null;
-  const month = parseInt(parsed[1], 10) - 1;
-  const day = parseInt(parsed[2], 10);
-  const year = 2000 + parseInt(parsed[3], 10);
-  return [new Date(year, month, day), match.groups.TYPE ?? ""];
+
+  const month = Number(parsed[1]);
+  const day = Number(parsed[2]);
+  const year = 2000 + Number(parsed[3]);
+  const date = new Date(year, month - 1, day);
+
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return null;
+  }
+
+  return [date, match.groups.TYPE ?? ""];
 }
 
 function buildTestamentBookLookup(books: BibleBook[]): Map<string, BibleBook> {

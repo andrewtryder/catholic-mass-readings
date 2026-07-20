@@ -3,7 +3,11 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-import { USCCBArgumentError, USCCBParseError } from "../src/errors.js";
+import {
+  USCCBArgumentError,
+  USCCBNetworkError,
+  USCCBParseError,
+} from "../src/errors.js";
 import type { HttpClient } from "../src/http.js";
 import { MassType, massToDict, parseMassType } from "../src/models.js";
 import { cleanText, USCCB } from "../src/usccb.js";
@@ -205,6 +209,83 @@ describe("getMassFromDate", () => {
     expect(mass).not.toBeNull();
     expect(calls).toBe(2);
   });
+
+  it("throws non-retryable network error directly without continuing or returning null", async () => {
+    let calls = 0;
+    const usccb = new USCCB({
+      async get() {
+        calls++;
+        throw new USCCBNetworkError("Server Error 500", {
+          status: 500,
+          retryable: false,
+          url: "https://bible.usccb.org/bible/readings/080625.cfm",
+        });
+      },
+      async head() {
+        return { text: "", ok: false, status: 500, url: "" };
+      },
+    });
+
+    await expect(
+      usccb.getMassFromDate(parseIsoDate("2025-08-06"), [
+        MassType.DEFAULT,
+        MassType.VIGIL,
+      ])
+    ).rejects.toThrow(USCCBNetworkError);
+    expect(calls).toBe(1);
+  });
+
+  it("throws USCCBParseError immediately when bot challenge is detected", async () => {
+    let calls = 0;
+    const challengeHtml =
+      "<html><head><title>Just a moment...</title></head><body>Enable JS</body></html>";
+    const usccb = new USCCB({
+      async get() {
+        calls++;
+        return {
+          text: challengeHtml,
+          ok: true,
+          status: 200,
+          url: "https://bible.usccb.org/bible/readings/080625.cfm",
+        };
+      },
+      async head() {
+        return { text: "", ok: true, status: 200, url: "" };
+      },
+    });
+
+    await expect(
+      usccb.getMassFromDate(parseIsoDate("2025-08-06"), [
+        MassType.DEFAULT,
+        MassType.VIGIL,
+      ])
+    ).rejects.toThrow(USCCBParseError);
+    expect(calls).toBe(1);
+  });
+
+  it("returns null only when every checked mass type returns 404", async () => {
+    let calls = 0;
+    const usccb = new USCCB({
+      async get() {
+        calls++;
+        throw new USCCBNetworkError("Not Found", {
+          status: 404,
+          retryable: false,
+          url: "https://bible.usccb.org/bible/readings/080625.cfm",
+        });
+      },
+      async head() {
+        return { text: "", ok: false, status: 404, url: "" };
+      },
+    });
+
+    const mass = await usccb.getMassFromDate(parseIsoDate("2025-08-06"), [
+      MassType.DEFAULT,
+      MassType.VIGIL,
+    ]);
+    expect(mass).toBeNull();
+    expect(calls).toBe(2);
+  });
 });
 
 describe("getMassFromUrl", () => {
@@ -264,6 +345,19 @@ describe("getMassFromTrustedUrl", () => {
     await expect(usccb.getMassFromTrustedUrl("not-a-url")).rejects.toThrow(
       USCCBArgumentError
     );
+  });
+
+  it("throws USCCBArgumentError for non-http/https protocols", async () => {
+    const usccb = new USCCB();
+    await expect(
+      usccb.getMassFromTrustedUrl("file:///etc/passwd")
+    ).rejects.toThrow(USCCBArgumentError);
+    await expect(
+      usccb.getMassFromTrustedUrl("ftp://example.com/readings/080625.cfm")
+    ).rejects.toThrow(USCCBArgumentError);
+    await expect(
+      usccb.getMassFromTrustedUrl("data:text/html,<h1>Reading</h1>")
+    ).rejects.toThrow(USCCBArgumentError);
   });
 });
 

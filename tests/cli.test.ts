@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
+import { mapWithConcurrency } from "../src/cli.js";
 
 const execFileAsync = promisify(execFile);
 const testDir = dirname(fileURLToPath(import.meta.url));
@@ -11,6 +12,7 @@ const rootDir = join(testDir, "..");
 const mockErrorHelper = join(testDir, "helpers", "mock-net-error.ts");
 const mockSuccessHelper = join(testDir, "helpers", "mock-net-success.ts");
 const mockCircularHelper = join(testDir, "helpers", "mock-circular-error.ts");
+const mockPartialHelper = join(testDir, "helpers", "mock-partial.ts");
 
 async function runCli(
   args: string[],
@@ -154,9 +156,7 @@ describe("CLI process tests", () => {
       });
       expect(result.exitCode).toBe(1);
       expect(result.stderr).toContain("[ERROR]");
-      expect(result.stderr).toContain(
-        "Failed to retrieve mass for 2026-07-20. USCCB may have blocked the request (403) or no readings exist for this date."
-      );
+      expect(result.stderr).toContain("fetch failed: network error");
     });
 
     it("handles network failure on get-mass-types and logs error to stderr", async () => {
@@ -166,6 +166,65 @@ describe("CLI process tests", () => {
       expect(result.exitCode).toBe(1);
       expect(result.stderr).toContain("[ERROR]");
       expect(result.stderr).toContain("fetch failed: network error");
+    });
+
+    it("handles network failure across get-mass-range and exits with code 1", async () => {
+      const result = await runCli(
+        [
+          "get-mass-range",
+          "-s",
+          "2026-07-20",
+          "-e",
+          "2026-07-22",
+          "--step",
+          "1",
+        ],
+        { importHelper: mockErrorHelper }
+      );
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("Range fetch summary:");
+      expect(result.stderr).toContain("2 failed");
+    });
+
+    it("handles partial range failures with --allow-partial exiting 0 when at least one succeeds", async () => {
+      const result = await runCli(
+        [
+          "get-mass-range",
+          "-s",
+          "2026-07-20",
+          "-e",
+          "2026-07-23",
+          "--step",
+          "1",
+          "--allow-partial",
+        ],
+        { importHelper: mockPartialHelper }
+      );
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("Feast of the Transfiguration");
+      expect(result.stderr).toContain(
+        "Range fetch summary: 1 succeeded, 1 not found, 1 failed"
+      );
+    });
+
+    it("handles partial range failures without --allow-partial exiting 1", async () => {
+      const result = await runCli(
+        [
+          "get-mass-range",
+          "-s",
+          "2026-07-20",
+          "-e",
+          "2026-07-23",
+          "--step",
+          "1",
+        ],
+        { importHelper: mockPartialHelper }
+      );
+      expect(result.exitCode).toBe(1);
+      expect(result.stdout).toContain("Feast of the Transfiguration");
+      expect(result.stderr).toContain(
+        "Range fetch summary: 1 succeeded, 1 not found, 1 failed"
+      );
     });
   });
 
@@ -244,5 +303,46 @@ describe("CLI process tests", () => {
       // Cleanup
       await rm(tmpSavePath, { force: true });
     });
+
+    it("rejects invalid --concurrency on get-mass-range", async () => {
+      const res0 = await runCli(["get-mass-range", "--concurrency", "0"]);
+      expect(res0.exitCode).toBe(1);
+      expect(res0.stderr).toContain(
+        "concurrency must be an integer between 1 and 20"
+      );
+
+      const res25 = await runCli(["get-mass-range", "--concurrency", "25"]);
+      expect(res25.exitCode).toBe(1);
+      expect(res25.stderr).toContain(
+        "concurrency must be an integer between 1 and 20"
+      );
+
+      const resAbc = await runCli(["get-mass-range", "--concurrency", "abc"]);
+      expect(resAbc.exitCode).toBe(1);
+      expect(resAbc.stderr).toContain(
+        "concurrency must be an integer between 1 and 20"
+      );
+    });
+  });
+});
+
+describe("mapWithConcurrency", () => {
+  it("limits concurrent worker execution and maintains result order", async () => {
+    let active = 0;
+    let maxActive = 0;
+    const items = [1, 2, 3, 4, 5, 6];
+
+    const results = await mapWithConcurrency(items, 2, async (item) => {
+      active++;
+      if (active > maxActive) {
+        maxActive = active;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      active--;
+      return item * 10;
+    });
+
+    expect(maxActive).toBeLessThanOrEqual(2);
+    expect(results).toEqual([10, 20, 30, 40, 50, 60]);
   });
 });

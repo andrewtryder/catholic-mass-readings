@@ -4,7 +4,9 @@ import {
   type FetchResult,
   wrapFetchWithObolus,
 } from "./http-obolus.js";
+import { readBoundedText } from "./http-body.js";
 export type { FetchLike, FetchResult };
+export { readBoundedText };
 
 export const DEFAULT_TIMEOUT_MS = 15_000;
 export const MAX_RESPONSE_SIZE_BYTES = 3 * 1024 * 1024; // 3 MB
@@ -33,6 +35,8 @@ export interface HttpClient {
   get(url: string, options?: HttpRequestOptions): Promise<HttpResponse>;
   /** Fetch a URL with HEAD (used to probe available mass types). */
   head(url: string, options?: HttpRequestOptions): Promise<HttpResponse>;
+  /** Reset client-scoped state (such as cached Obolus proof cookies). */
+  reset?(origin?: string): void;
 }
 
 const DEFAULT_HEADERS = {
@@ -96,57 +100,6 @@ function isHtmlOrXmlContentType(contentType: string): boolean {
   );
 }
 
-async function readBoundedText(
-  response: Pick<Response, "text"> & { body?: unknown },
-  maxBytes: number
-): Promise<string> {
-  const body = response.body as
-    | {
-        getReader?: () => ReadableStreamDefaultReader<Uint8Array>;
-      }
-    | null
-    | undefined;
-
-  if (body && typeof body.getReader === "function") {
-    const reader = body.getReader();
-    const chunks: Uint8Array[] = [];
-    let totalBytes = 0;
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        if (value) {
-          totalBytes += value.byteLength;
-          if (totalBytes > maxBytes) {
-            await reader.cancel("Response exceeded maximum allowed size");
-            throw new USCCBNetworkError(
-              `Response exceeded maximum allowed size of ${maxBytes} bytes`
-            );
-          }
-          chunks.push(value);
-        }
-      }
-      const fullBuffer = new Uint8Array(totalBytes);
-      let offset = 0;
-      for (const chunk of chunks) {
-        fullBuffer.set(chunk, offset);
-        offset += chunk.byteLength;
-      }
-      return new TextDecoder().decode(fullBuffer);
-    } finally {
-      reader.releaseLock?.();
-    }
-  }
-
-  const text = await response.text();
-  if (new TextEncoder().encode(text).byteLength > maxBytes) {
-    throw new USCCBNetworkError(
-      `Response exceeded maximum allowed size of ${maxBytes} bytes`
-    );
-  }
-  return text;
-}
-
 /**
  * Create an {@link HttpClient} backed by the platform `fetch` API (or a compatible implementation).
  */
@@ -203,7 +156,7 @@ export function createFetchClient(
         const message = error instanceof Error ? error.message : String(error);
         throw new USCCBNetworkError(
           `Network request failed for ${currentUrl.href}: ${message}`,
-          error
+          { cause: error, url: currentUrl.href }
         );
       }
 
@@ -216,12 +169,15 @@ export function createFetchClient(
         const location = response.headers.get("location");
         if (location) {
           if (redirects >= maxRedirects) {
-            throw new USCCBNetworkError("Maximum redirect count exceeded");
+            throw new USCCBNetworkError("Maximum redirect count exceeded", {
+              url: currentUrl.href,
+            });
           }
           const targetUrl = new URL(location, currentUrl);
           if (targetUrl.origin !== currentUrl.origin) {
             throw new USCCBNetworkError(
-              `Cross-origin redirect from ${currentUrl.origin} to ${targetUrl.origin} is not allowed`
+              `Cross-origin redirect from ${currentUrl.origin} to ${targetUrl.origin} is not allowed`,
+              { url: currentUrl.href }
             );
           }
           currentUrl = targetUrl;
@@ -236,7 +192,8 @@ export function createFetchClient(
           const originalUrl = new URL(urlStr);
           if (finalUrl.origin !== originalUrl.origin) {
             throw new USCCBNetworkError(
-              `Cross-origin redirect detected: ${originalUrl.origin} -> ${finalUrl.origin}`
+              `Cross-origin redirect detected: ${originalUrl.origin} -> ${finalUrl.origin}`,
+              { url: response.url }
             );
           }
         } catch (e) {
@@ -261,7 +218,8 @@ export function createFetchClient(
           !isHtmlOrXmlContentType(contentType)
         ) {
           throw new USCCBNetworkError(
-            `Expected HTML content type from ${currentUrl.href}, but received ${contentType}`
+            `Expected HTML content type from ${currentUrl.href}, but received ${contentType}`,
+            { url: currentUrl.href, status: response.status }
           );
         }
       }
@@ -276,7 +234,7 @@ export function createFetchClient(
         const message = error instanceof Error ? error.message : String(error);
         throw new USCCBNetworkError(
           `Failed to read response body from ${currentUrl.href}: ${message}`,
-          error
+          { cause: error, url: currentUrl.href, status: response.status }
         );
       }
 
@@ -289,7 +247,7 @@ export function createFetchClient(
     }
   }
 
-  return {
+  const client: HttpClient = {
     async get(
       url: string,
       options?: HttpRequestOptions
@@ -303,4 +261,12 @@ export function createFetchClient(
       return executeRequest(url, "HEAD", options);
     },
   };
+
+  if ("reset" in resolvedFetch && typeof resolvedFetch.reset === "function") {
+    client.reset = (origin?: string) => {
+      (resolvedFetch.reset as (o?: string) => void)(origin);
+    };
+  }
+
+  return client;
 }

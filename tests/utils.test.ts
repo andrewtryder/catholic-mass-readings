@@ -52,10 +52,21 @@ describe("parseUrl", () => {
     expect(
       parseUrl("https://bible.usccb.org/bible/readings/122525-Dawn.cfm")
     ).toEqual([new Date(2025, 11, 25), "Dawn"]);
+    expect(
+      parseUrl(
+        "https://bible.usccb.org/bible/readings/122525.cfm?foo=bar#section"
+      )
+    ).toEqual([new Date(2025, 11, 25), ""]);
   });
 
-  it("returns null for invalid URLs", () => {
+  it("returns null for invalid URLs or impossible calendar dates", () => {
     expect(parseUrl("https://example.com/unknown")).toBeNull();
+    expect(
+      parseUrl("https://bible.usccb.org/bible/readings/043125.cfm")
+    ).toBeNull();
+    expect(
+      parseUrl("https://bible.usccb.org/bible/readings/022925.cfm")
+    ).toBeNull();
   });
 });
 

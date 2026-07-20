@@ -156,7 +156,7 @@ export function createFetchClient(
         const message = error instanceof Error ? error.message : String(error);
         throw new USCCBNetworkError(
           `Network request failed for ${currentUrl.href}: ${message}`,
-          error
+          { cause: error, url: currentUrl.href }
         );
       }
 
@@ -169,12 +169,15 @@ export function createFetchClient(
         const location = response.headers.get("location");
         if (location) {
           if (redirects >= maxRedirects) {
-            throw new USCCBNetworkError("Maximum redirect count exceeded");
+            throw new USCCBNetworkError("Maximum redirect count exceeded", {
+              url: currentUrl.href,
+            });
           }
           const targetUrl = new URL(location, currentUrl);
           if (targetUrl.origin !== currentUrl.origin) {
             throw new USCCBNetworkError(
-              `Cross-origin redirect from ${currentUrl.origin} to ${targetUrl.origin} is not allowed`
+              `Cross-origin redirect from ${currentUrl.origin} to ${targetUrl.origin} is not allowed`,
+              { url: currentUrl.href }
             );
           }
           currentUrl = targetUrl;
@@ -189,7 +192,8 @@ export function createFetchClient(
           const originalUrl = new URL(urlStr);
           if (finalUrl.origin !== originalUrl.origin) {
             throw new USCCBNetworkError(
-              `Cross-origin redirect detected: ${originalUrl.origin} -> ${finalUrl.origin}`
+              `Cross-origin redirect detected: ${originalUrl.origin} -> ${finalUrl.origin}`,
+              { url: response.url }
             );
           }
         } catch (e) {
@@ -214,7 +218,8 @@ export function createFetchClient(
           !isHtmlOrXmlContentType(contentType)
         ) {
           throw new USCCBNetworkError(
-            `Expected HTML content type from ${currentUrl.href}, but received ${contentType}`
+            `Expected HTML content type from ${currentUrl.href}, but received ${contentType}`,
+            { url: currentUrl.href, status: response.status }
           );
         }
       }
@@ -229,7 +234,7 @@ export function createFetchClient(
         const message = error instanceof Error ? error.message : String(error);
         throw new USCCBNetworkError(
           `Failed to read response body from ${currentUrl.href}: ${message}`,
-          error
+          { cause: error, url: currentUrl.href, status: response.status }
         );
       }
 

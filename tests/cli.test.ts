@@ -12,6 +12,7 @@ const rootDir = join(testDir, "..");
 const mockErrorHelper = join(testDir, "helpers", "mock-net-error.ts");
 const mockSuccessHelper = join(testDir, "helpers", "mock-net-success.ts");
 const mockCircularHelper = join(testDir, "helpers", "mock-circular-error.ts");
+const mockPartialHelper = join(testDir, "helpers", "mock-partial.ts");
 
 async function runCli(
   args: string[],
@@ -155,9 +156,7 @@ describe("CLI process tests", () => {
       });
       expect(result.exitCode).toBe(1);
       expect(result.stderr).toContain("[ERROR]");
-      expect(result.stderr).toContain(
-        "Failed to retrieve mass for 2026-07-20. USCCB may have blocked the request (403) or no readings exist for this date."
-      );
+      expect(result.stderr).toContain("fetch failed: network error");
     });
 
     it("handles network failure on get-mass-types and logs error to stderr", async () => {
@@ -167,6 +166,65 @@ describe("CLI process tests", () => {
       expect(result.exitCode).toBe(1);
       expect(result.stderr).toContain("[ERROR]");
       expect(result.stderr).toContain("fetch failed: network error");
+    });
+
+    it("handles network failure across get-mass-range and exits with code 1", async () => {
+      const result = await runCli(
+        [
+          "get-mass-range",
+          "-s",
+          "2026-07-20",
+          "-e",
+          "2026-07-22",
+          "--step",
+          "1",
+        ],
+        { importHelper: mockErrorHelper }
+      );
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("Range fetch summary:");
+      expect(result.stderr).toContain("2 failed");
+    });
+
+    it("handles partial range failures with --allow-partial exiting 0 when at least one succeeds", async () => {
+      const result = await runCli(
+        [
+          "get-mass-range",
+          "-s",
+          "2026-07-20",
+          "-e",
+          "2026-07-23",
+          "--step",
+          "1",
+          "--allow-partial",
+        ],
+        { importHelper: mockPartialHelper }
+      );
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("Feast of the Transfiguration");
+      expect(result.stderr).toContain(
+        "Range fetch summary: 1 succeeded, 1 not found, 1 failed"
+      );
+    });
+
+    it("handles partial range failures without --allow-partial exiting 1", async () => {
+      const result = await runCli(
+        [
+          "get-mass-range",
+          "-s",
+          "2026-07-20",
+          "-e",
+          "2026-07-23",
+          "--step",
+          "1",
+        ],
+        { importHelper: mockPartialHelper }
+      );
+      expect(result.exitCode).toBe(1);
+      expect(result.stdout).toContain("Feast of the Transfiguration");
+      expect(result.stderr).toContain(
+        "Range fetch summary: 1 succeeded, 1 not found, 1 failed"
+      );
     });
   });
 

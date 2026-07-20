@@ -119,7 +119,7 @@ describe("createFetchClient resource limits and security", () => {
     ).rejects.toThrow(/Cross-origin redirect/i);
   });
 
-  it("wraps raw network rejections in USCCBNetworkError", async () => {
+  it("wraps raw network rejections in USCCBNetworkError with options and url metadata", async () => {
     const fetchImpl = vi.fn().mockRejectedValue(new Error("ECONNREFUSED"));
 
     const client = createFetchClient(fetchImpl, { obolus: false });
@@ -129,6 +129,38 @@ describe("createFetchClient resource limits and security", () => {
     await expect(
       client.get("https://bible.usccb.org/bible/readings/010125.cfm")
     ).rejects.toThrow(/ECONNREFUSED/);
+
+    try {
+      await client.get("https://bible.usccb.org/bible/readings/010125.cfm");
+    } catch (err: unknown) {
+      expect(err).toBeInstanceOf(USCCBNetworkError);
+      const networkErr = err as USCCBNetworkError;
+      expect(networkErr.url).toBe(
+        "https://bible.usccb.org/bible/readings/010125.cfm"
+      );
+      expect(networkErr.options?.url).toBe(
+        "https://bible.usccb.org/bible/readings/010125.cfm"
+      );
+    }
+  });
+
+  it("USCCBNetworkError supports both legacy cause argument and structured options object", () => {
+    const causeErr = new Error("legacy");
+    const legacy = new USCCBNetworkError("msg", causeErr);
+    expect(legacy.cause).toBe(causeErr);
+    expect(legacy.status).toBeUndefined();
+
+    const structured = new USCCBNetworkError("msg", {
+      cause: causeErr,
+      status: 500,
+      url: "https://bible.usccb.org",
+      retryable: true,
+    });
+    expect(structured.cause).toBe(causeErr);
+    expect(structured.status).toBe(500);
+    expect(structured.url).toBe("https://bible.usccb.org");
+    expect(structured.retryable).toBe(true);
+    expect(structured.options?.status).toBe(500);
   });
 
   it("supports caller cancellation via AbortSignal", async () => {

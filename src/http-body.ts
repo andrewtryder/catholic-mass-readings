@@ -4,7 +4,11 @@ import { USCCBNetworkError } from "./errors.js";
  * Read response body text up to `maxBytes`, cancelling streaming readers and throwing `USCCBNetworkError` if exceeded.
  */
 export async function readBoundedText(
-  response: Pick<Response, "text"> & { body?: unknown },
+  response: Pick<Response, "text"> & {
+    body?: unknown;
+    url?: string;
+    status?: number;
+  },
   maxBytes: number
 ): Promise<string> {
   const body = response.body as
@@ -27,7 +31,8 @@ export async function readBoundedText(
           if (totalBytes > maxBytes) {
             await reader.cancel("Response exceeded maximum allowed size");
             throw new USCCBNetworkError(
-              `Response exceeded maximum allowed size of ${maxBytes} bytes`
+              `Response exceeded maximum allowed size of ${maxBytes} bytes`,
+              { url: response.url, status: response.status }
             );
           }
           chunks.push(value);
@@ -48,7 +53,8 @@ export async function readBoundedText(
   const text = await response.text();
   if (new TextEncoder().encode(text).byteLength > maxBytes) {
     throw new USCCBNetworkError(
-      `Response exceeded maximum allowed size of ${maxBytes} bytes`
+      `Response exceeded maximum allowed size of ${maxBytes} bytes`,
+      { url: response.url, status: response.status }
     );
   }
   return text;

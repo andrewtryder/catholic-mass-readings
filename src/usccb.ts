@@ -193,6 +193,7 @@ export class USCCB {
         }
       }
 
+      let hitRetryableError = false;
       for (const type of types) {
         if (opts?.signal?.aborted) {
           opts.signal.throwIfAborted();
@@ -204,8 +205,20 @@ export class USCCB {
           if (opts?.signal?.aborted) {
             throw err;
           }
-          continue;
+          if (err instanceof USCCBNetworkError) {
+            if (err.status === 404) {
+              continue;
+            }
+            if (err.retryable && recovery < MAX_RETRIES - 1) {
+              hitRetryableError = true;
+              break;
+            }
+          }
+          throw err;
         }
+      }
+      if (!hitRetryableError) {
+        return null;
       }
     }
     return null;
@@ -233,6 +246,9 @@ export class USCCB {
       validUrl = new URL(url);
     } catch {
       throw new USCCBArgumentError("URL must be valid");
+    }
+    if (validUrl.protocol !== "https:" && validUrl.protocol !== "http:") {
+      throw new USCCBArgumentError("URL must use HTTP or HTTPS");
     }
     if (validUrl.username || validUrl.password) {
       throw new USCCBArgumentError("URL must not contain credentials");
@@ -274,10 +290,9 @@ export class USCCB {
       }
       const message =
         firstError instanceof Error ? firstError.message : String(firstError);
-      throw new USCCBNetworkError(
-        `Failed to probe mass types: ${message}`,
-        firstError
-      );
+      throw new USCCBNetworkError(`Failed to probe mass types: ${message}`, {
+        cause: firstError,
+      });
     }
 
     return checks
@@ -309,12 +324,14 @@ export class USCCB {
       const message = error instanceof Error ? error.message : String(error);
       throw new USCCBNetworkError(
         `Failed to fetch mass from ${url}: ${message}`,
-        error
+        { cause: error, url }
       );
     }
     if (!response.ok) {
+      const retryable = [403, 429, 502, 503, 504].includes(response.status);
       throw new USCCBNetworkError(
-        `Failed to fetch mass from ${url}: ${response.status}`
+        `Failed to fetch mass from ${url}: ${response.status}`,
+        { status: response.status, url, retryable }
       );
     }
     return this.parseMass(response.text, url, date, type);

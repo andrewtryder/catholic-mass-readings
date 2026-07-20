@@ -6,14 +6,50 @@ export class USCCBError extends Error {
   }
 }
 
+export interface USCCBNetworkErrorOptions {
+  cause?: unknown;
+  status?: number;
+  url?: string;
+  retryable?: boolean;
+}
+
+function isNetworkErrorOptions(
+  value: unknown
+): value is USCCBNetworkErrorOptions {
+  if (!value || typeof value !== "object" || value instanceof Error) {
+    return false;
+  }
+  const keys = Object.keys(value);
+  if (keys.length === 0) return false;
+  return keys.every((key) =>
+    ["cause", "status", "url", "retryable"].includes(key)
+  );
+}
+
 /** Thrown when a network request to bible.usccb.org fails (e.g., DNS, connection). */
 export class USCCBNetworkError extends USCCBError {
+  public readonly cause?: unknown;
+  public readonly status?: number;
+  public readonly url?: string;
+  public readonly retryable?: boolean;
+  public readonly options: USCCBNetworkErrorOptions;
+
   constructor(
     message: string,
-    public readonly cause?: unknown
+    optionsOrCause: USCCBNetworkErrorOptions | unknown = {}
   ) {
     super(message);
     this.name = "USCCBNetworkError";
+    if (isNetworkErrorOptions(optionsOrCause)) {
+      this.options = optionsOrCause;
+      this.cause = optionsOrCause.cause;
+      this.status = optionsOrCause.status;
+      this.url = optionsOrCause.url;
+      this.retryable = optionsOrCause.retryable;
+    } else {
+      this.options = { cause: optionsOrCause };
+      this.cause = optionsOrCause;
+    }
   }
 }
 

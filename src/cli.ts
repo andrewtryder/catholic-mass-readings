@@ -41,6 +41,13 @@ function concurrencyOption(): Option {
   ).default("3");
 }
 
+function allowPartialOption(): Option {
+  return new Option(
+    "--allow-partial",
+    "Allow partial results with exit code 0 if at least one date succeeded"
+  );
+}
+
 function parseConcurrencyOption(value: string): number {
   const n = Number(value);
   if (!Number.isInteger(n) || n < 1 || n > 20) {
@@ -185,7 +192,7 @@ program
       const mass = await usccb.getMassFromDate(date, types);
       if (!mass) {
         logger.error(
-          `Failed to retrieve mass for ${options.date}. USCCB may have blocked the request (403) or no readings exist for this date.`
+          `No readings found for ${options.date}. USCCB returned 404 for all checked mass types.`
         );
         process.exitCode = 1;
         return;
@@ -218,6 +225,7 @@ program
   .addOption(massTypeOption())
   .addOption(citationsOnlyOption())
   .addOption(concurrencyOption())
+  .addOption(allowPartialOption())
   .option("--step <days>", "Number of days to step", "7")
   .option("--save <file>", "Save JSON output to file")
   .action(
@@ -227,6 +235,7 @@ program
       type?: string[];
       citationsOnly?: boolean;
       concurrency: string;
+      allowPartial?: boolean;
       step: string;
       save?: string;
     }) => {
@@ -236,7 +245,14 @@ program
       const format = options.citationsOnly ? "citations" : "full";
       const concurrency = parseConcurrencyOption(options.concurrency);
       const dates = USCCB.getMassDates(start, end, Number(options.step));
-      await printMassRange(dates, types, options.save, format, concurrency);
+      await printMassRange(
+        dates,
+        types,
+        options.save,
+        format,
+        concurrency,
+        options.allowPartial
+      );
     }
   );
 
@@ -248,6 +264,7 @@ program
   .addOption(massTypeOption())
   .addOption(citationsOnlyOption())
   .addOption(concurrencyOption())
+  .addOption(allowPartialOption())
   .option("--save <file>", "Save JSON output to file")
   .action(
     async (options: {
@@ -256,6 +273,7 @@ program
       type?: string[];
       citationsOnly?: boolean;
       concurrency: string;
+      allowPartial?: boolean;
       save?: string;
     }) => {
       const start = parseDateOption(options.start);
@@ -264,23 +282,65 @@ program
       const format = options.citationsOnly ? "citations" : "full";
       const concurrency = parseConcurrencyOption(options.concurrency);
       const dates = USCCB.getSundayMassDates(start, end);
-      await printMassRange(dates, types, options.save, format, concurrency);
+      await printMassRange(
+        dates,
+        types,
+        options.save,
+        format,
+        concurrency,
+        options.allowPartial
+      );
     }
   );
+
+type DateFetchResult =
+  | {
+      date: Date;
+      status: "success";
+      mass: NonNullable<Awaited<ReturnType<USCCB["getMassFromDate"]>>>;
+    }
+  | { date: Date; status: "not-found" }
+  | { date: Date; status: "failed"; error: unknown };
 
 async function printMassRange(
   dates: Date[],
   types: MassType[] | undefined,
   save?: string,
   format: OutputFormat = "full",
-  concurrency = 3
+  concurrency = 3,
+  allowPartial = false
 ): Promise<void> {
   const usccb = new USCCB(await createNodeHttpClient());
-  const responses = await mapWithConcurrency(dates, concurrency, (date) =>
-    usccb.getMassFromDate(date, types)
+  const results = await mapWithConcurrency<Date, DateFetchResult>(
+    dates,
+    concurrency,
+    async (date) => {
+      try {
+        const mass = await usccb.getMassFromDate(date, types);
+        if (mass) {
+          return { date, status: "success", mass };
+        }
+        return { date, status: "not-found" };
+      } catch (error) {
+        return { date, status: "failed", error };
+      }
+    }
   );
-  const masses = responses
-    .filter((mass): mass is NonNullable<typeof mass> => mass !== null)
+
+  const successes = results.filter(
+    (
+      r
+    ): r is {
+      date: Date;
+      status: "success";
+      mass: NonNullable<Awaited<ReturnType<USCCB["getMassFromDate"]>>>;
+    } => r.status === "success"
+  );
+  const notFound = results.filter((r) => r.status === "not-found");
+  const failed = results.filter((r) => r.status === "failed");
+
+  const masses = successes
+    .map((r) => r.mass)
     .sort((a, b) => {
       const aOrdinal = a.date ? a.date.getTime() : -1;
       const bOrdinal = b.date ? b.date.getTime() : -1;
@@ -297,6 +357,26 @@ async function printMassRange(
       save,
       masses.map((mass) => massToDict(mass, format))
     );
+  }
+
+  if (notFound.length > 0 || failed.length > 0) {
+    logger.error(
+      `Range fetch summary: ${successes.length} succeeded, ${notFound.length} not found, ${failed.length} failed`
+    );
+    for (const item of notFound) {
+      logger.error(`Not found for date ${formatIsoDate(item.date)}`);
+    }
+    for (const item of failed) {
+      if (item.status === "failed") {
+        const message =
+          item.error instanceof Error ? item.error.message : String(item.error);
+        logger.error(`Failed for date ${formatIsoDate(item.date)}: ${message}`);
+      }
+    }
+
+    if (!allowPartial || successes.length === 0) {
+      process.exitCode = 1;
+    }
   }
 }
 

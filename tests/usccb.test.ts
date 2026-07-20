@@ -95,24 +95,37 @@ describe("USCCB static helpers", () => {
     expect(dates[0].toISOString().slice(0, 10)).toBe("2025-01-12");
   });
 
-  it("getSundayMassDates returns empty array when range ends before first Sunday", () => {
-    const dates = USCCB.getSundayMassDates(
-      parseIsoDate("2025-01-06"),
-      parseIsoDate("2025-01-07")
-    );
-    expect(dates).toEqual([]);
+  it("getSundayMassDates returns empty array when range ends before or at first Sunday (exclusive end)", () => {
+    expect(
+      USCCB.getSundayMassDates(
+        parseIsoDate("2025-01-06"),
+        parseIsoDate("2025-01-07")
+      )
+    ).toEqual([]);
+    // start is Sunday Jan 5, end is Sunday Jan 5 (start >= end -> throws USCCBArgumentError)
+    expect(() =>
+      USCCB.getSundayMassDates(
+        parseIsoDate("2025-01-05"),
+        parseIsoDate("2025-01-05")
+      )
+    ).toThrow(USCCBArgumentError);
+    // start < end (Mon Jan 6 -> Sun Jan 12), firstSunday is Jan 12 which equals end -> empty
+    expect(
+      USCCB.getSundayMassDates(
+        parseIsoDate("2025-01-06"),
+        parseIsoDate("2025-01-12")
+      )
+    ).toEqual([]);
   });
 
-  it("getMassDates rejects non-positive or non-integer stepDays", () => {
+  it("getMassDates rejects 0, -1, 0.5, NaN, and Infinity stepDays", () => {
     const start = parseIsoDate("2025-01-01");
     const end = parseIsoDate("2025-01-15");
-    expect(() => USCCB.getMassDates(start, end, 0)).toThrow(USCCBArgumentError);
-    expect(() => USCCB.getMassDates(start, end, -5)).toThrow(
-      USCCBArgumentError
-    );
-    expect(() => USCCB.getMassDates(start, end, 1.5)).toThrow(
-      USCCBArgumentError
-    );
+    for (const stepVal of [0, -1, 0.5, NaN, Infinity]) {
+      expect(() => USCCB.getMassDates(start, end, stepVal)).toThrow(
+        USCCBArgumentError
+      );
+    }
   });
 
   it("getMassDates and getSundayMassDates reject invalid dates", () => {
@@ -392,5 +405,51 @@ describe("parseMass contract validation", () => {
     expect(() =>
       usccb.parseMass(html, "https://bible.usccb.org/test", null, null)
     ).toThrow("USCCB page contained no reading text or citations");
+  });
+
+  it("throws USCCBParseError when given empty HTML string", () => {
+    expect(() =>
+      usccb.parseMass("", "https://bible.usccb.org/test", null, null)
+    ).toThrow(USCCBParseError);
+    expect(() =>
+      usccb.parseMass("", "https://bible.usccb.org/test", null, null)
+    ).toThrow("USCCB page did not contain a title");
+  });
+
+  it("throws USCCBParseError when given malformed HTML without valid sections", () => {
+    const malformed =
+      "<html><head><title>Test | USCCB</title></head><body><div><p>Broken structure";
+    expect(() =>
+      usccb.parseMass(malformed, "https://bible.usccb.org/test", null, null)
+    ).toThrow(USCCBParseError);
+    expect(() =>
+      usccb.parseMass(malformed, "https://bible.usccb.org/test", null, null)
+    ).toThrow("USCCB page contained no recognizable reading sections");
+  });
+
+  it("throws USCCBParseError when given soft-block or Obolus challenge HTML", () => {
+    const challengeHtml = readFileSync(
+      join(dataDir, "obolus-challenge.html"),
+      "utf-8"
+    );
+    expect(() =>
+      usccb.parseMass(challengeHtml, "https://bible.usccb.org/test", null, null)
+    ).toThrow(USCCBParseError);
+    expect(() =>
+      usccb.parseMass(challengeHtml, "https://bible.usccb.org/test", null, null)
+    ).toThrow(
+      "USCCB returned a block or challenge page instead of readings content"
+    );
+
+    const accessDenied =
+      "<html><body><h1>Access Denied</h1><p>You do not have permission to access USCCB.</p></body></html>";
+    expect(() =>
+      usccb.parseMass(accessDenied, "https://bible.usccb.org/test", null, null)
+    ).toThrow(USCCBParseError);
+    expect(() =>
+      usccb.parseMass(accessDenied, "https://bible.usccb.org/test", null, null)
+    ).toThrow(
+      "USCCB returned a block or challenge page instead of readings content"
+    );
   });
 });

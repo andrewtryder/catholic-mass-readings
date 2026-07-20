@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
+import { USCCBArgumentError } from "../src/errors.js";
 import type { HttpClient } from "../src/http.js";
 import { MassType, massToDict, parseMassType } from "../src/models.js";
 import { cleanText, USCCB } from "../src/usccb.js";
@@ -102,6 +103,35 @@ describe("USCCB static helpers", () => {
     expect(dates).toHaveLength(1);
     expect(dates[0].toISOString().slice(0, 10)).toBe("2025-01-12");
   });
+
+  it("getMassDates rejects non-positive or non-integer stepDays", () => {
+    const start = parseIsoDate("2025-01-01");
+    const end = parseIsoDate("2025-01-15");
+    expect(() => USCCB.getMassDates(start, end, 0)).toThrow(USCCBArgumentError);
+    expect(() => USCCB.getMassDates(start, end, -5)).toThrow(
+      USCCBArgumentError
+    );
+    expect(() => USCCB.getMassDates(start, end, 1.5)).toThrow(
+      USCCBArgumentError
+    );
+  });
+
+  it("getMassDates and getSundayMassDates reject invalid dates", () => {
+    const valid = parseIsoDate("2025-01-01");
+    const invalid = new Date(NaN);
+    expect(() => USCCB.getMassDates(invalid, valid)).toThrow(
+      USCCBArgumentError
+    );
+    expect(() => USCCB.getMassDates(valid, invalid)).toThrow(
+      USCCBArgumentError
+    );
+    expect(() => USCCB.getSundayMassDates(invalid, valid)).toThrow(
+      USCCBArgumentError
+    );
+    expect(() => USCCB.getSundayMassDates(valid, invalid)).toThrow(
+      USCCBArgumentError
+    );
+  });
 });
 
 describe("cleanText", () => {
@@ -183,6 +213,20 @@ describe("getMassTypes", () => {
     });
     const types = await usccb.getMassTypes(parseIsoDate("2025-08-06"));
     expect(types).toEqual([MassType.DEFAULT]);
+  });
+
+  it("rejects invalid dates on instance methods", async () => {
+    const usccb = new USCCB();
+    const invalid = new Date(NaN);
+    await expect(usccb.getMass(invalid, MassType.DEFAULT)).rejects.toThrow(
+      USCCBArgumentError
+    );
+    await expect(usccb.getMassFromDate(invalid)).rejects.toThrow(
+      USCCBArgumentError
+    );
+    await expect(usccb.getMassTypes(invalid)).rejects.toThrow(
+      USCCBArgumentError
+    );
   });
 });
 

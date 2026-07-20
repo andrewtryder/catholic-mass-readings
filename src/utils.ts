@@ -4,6 +4,7 @@ import {
   OLD_TESTAMENT_BOOKS,
   type BibleBook,
 } from "./constants.js";
+import { USCCBArgumentError } from "./errors.js";
 
 const ABBREVIATED_BOOK_PATTERN = /([0-9]?\s?[A-Z][a-z]*):?/g;
 const BOOK_LINK_PATTERN = /bible\/([^/]+)/;
@@ -26,8 +27,16 @@ const oldTestamentLookup: Map<string, BibleBook> =
 const newTestamentLookup: Map<string, BibleBook> =
   buildTestamentBookLookup(NEW_TESTAMENT_BOOKS);
 
+/** Validate that a value is a valid, finite Date instance. */
+export function assertValidDate(date: Date, name: string): void {
+  if (!(date instanceof Date) || !Number.isFinite(date.getTime())) {
+    throw new USCCBArgumentError(`${name} must be a valid date`);
+  }
+}
+
 /** Format a date as `MMDDYY` for USCCB URL paths. */
 export function formatUrlDate(date: Date): string {
+  assertValidDate(date, "date");
   const mm = String(date.getMonth() + 1).padStart(2, "0");
   const dd = String(date.getDate()).padStart(2, "0");
   const yy = String(date.getFullYear() % 100).padStart(2, "0");
@@ -36,8 +45,23 @@ export function formatUrlDate(date: Date): string {
 
 /** Parse an ISO date string (`YYYY-MM-DD`) into a local `Date`. */
 export function parseIsoDate(value: string): Date {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw new USCCBArgumentError(
+      `Invalid date format: ${value}. Expected YYYY-MM-DD`
+    );
+  }
   const [year, month, day] = value.split("-").map(Number);
-  return new Date(year, month - 1, day);
+  const date = new Date(year, month - 1, day);
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    throw new USCCBArgumentError(
+      `Invalid date format: ${value}. Expected valid calendar date in YYYY-MM-DD`
+    );
+  }
+  return date;
 }
 
 /** Today's date in America/New_York timezone. */
@@ -57,6 +81,7 @@ export function todayInNewYork(): Date {
 
 /** Add calendar days to a date. */
 export function addDays(date: Date, days: number): Date {
+  assertValidDate(date, "date");
   const result = new Date(date);
   result.setDate(result.getDate() + days);
   return result;

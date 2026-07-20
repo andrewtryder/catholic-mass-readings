@@ -23,6 +23,7 @@ import {
 } from "./models.js";
 import {
   addDays,
+  assertValidDate,
   getBookFromVerse,
   parseUrl,
   todayInNewYork,
@@ -73,10 +74,14 @@ export class USCCB {
 
   /** Generate Sunday dates between `start` and `end` (inclusive start, exclusive end). */
   static getSundayMassDates(start: Date, end?: Date): Date[] {
-    if (end !== undefined && start >= end) {
-      throw new USCCBArgumentError(
-        `Invalid range (${formatIsoDate(start)} >= ${formatIsoDate(end)})`
-      );
+    assertValidDate(start, "start");
+    if (end !== undefined) {
+      assertValidDate(end, "end");
+      if (start >= end) {
+        throw new USCCBArgumentError(
+          `Invalid range (${formatIsoDate(start)} >= ${formatIsoDate(end)})`
+        );
+      }
     }
 
     let adjustedStart = start;
@@ -96,6 +101,16 @@ export class USCCB {
 
   /** Generate dates stepping by `stepDays` from `start` until `end` (capped at {@link maxQueryDate}). */
   static getMassDates(start: Date, end?: Date, stepDays = 7): Date[] {
+    assertValidDate(start, "start");
+    if (end !== undefined) {
+      assertValidDate(end, "end");
+    }
+    if (!Number.isInteger(stepDays) || stepDays <= 0) {
+      throw new USCCBArgumentError(
+        `stepDays must be a positive integer; received ${stepDays}`
+      );
+    }
+
     const maxDate = USCCB.maxQueryDate();
     const effectiveEnd =
       end === undefined
@@ -128,6 +143,7 @@ export class USCCB {
 
   /** Fetch mass for a date and explicit mass type. */
   async getMass(date: Date, type: MassType): Promise<Mass | null> {
+    assertValidDate(date, "date");
     const url = massTypeToUrl(type, date);
     return this.fetchMass(url, date, type);
   }
@@ -140,6 +156,7 @@ export class USCCB {
     date: Date,
     types: MassType[] = DEFAULT_MASS_TYPES
   ): Promise<Mass | null> {
+    assertValidDate(date, "date");
     for (let recovery = 0; recovery < MAX_RETRIES; recovery++) {
       if (recovery > 0) {
         resetObolusState();
@@ -175,6 +192,7 @@ export class USCCB {
 
   /** List mass types available for a date (via HEAD requests). */
   async getMassTypes(date: Date): Promise<MassType[]> {
+    assertValidDate(date, "date");
     const urlsToType = new Map(
       Object.values(MassType).map((type) => [massTypeToUrl(type, date), type])
     );

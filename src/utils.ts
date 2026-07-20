@@ -2,6 +2,7 @@ import {
   DATE_FMT,
   NEW_TESTAMENT_BOOKS,
   OLD_TESTAMENT_BOOKS,
+  USCCB_ORIGIN,
   type BibleBook,
 } from "./constants.js";
 import { USCCBArgumentError } from "./errors.js";
@@ -32,6 +33,27 @@ export function assertValidDate(date: Date, name: string): void {
   if (!(date instanceof Date) || !Number.isFinite(date.getTime())) {
     throw new USCCBArgumentError(`${name} must be a valid date`);
   }
+}
+
+/** Validate that a string is a trusted USCCB readings URL (`https://bible.usccb.org/bible/readings/`). */
+export function assertUsccbReadingsUrl(rawUrl: string): URL {
+  let url: URL;
+  try {
+    url = new URL(rawUrl);
+  } catch {
+    throw new USCCBArgumentError("URL must be a USCCB readings URL");
+  }
+
+  if (
+    url.origin !== USCCB_ORIGIN ||
+    !url.pathname.startsWith("/bible/readings/") ||
+    url.username ||
+    url.password
+  ) {
+    throw new USCCBArgumentError("URL must be a USCCB readings URL");
+  }
+
+  return url;
 }
 
 /** Format a date as `MMDDYY` for USCCB URL paths. */

@@ -23,6 +23,7 @@ import {
 } from "./models.js";
 import {
   addDays,
+  assertUsccbReadingsUrl,
   assertValidDate,
   getBookFromVerse,
   parseUrl,
@@ -174,8 +175,26 @@ export class USCCB {
     return null;
   }
 
-  /** Fetch and parse mass from a USCCB readings URL. */
+  /** Fetch and parse mass from a USCCB readings URL (`https://bible.usccb.org/bible/readings/`). */
   async getMassFromUrl(url: string): Promise<Mass | null> {
+    assertUsccbReadingsUrl(url);
+    return this.getMassFromTrustedUrl(url);
+  }
+
+  /**
+   * Fetch and parse mass from any trusted URL without USCCB origin and path enforcement.
+   * Requires explicit opt-in when fetching from sources outside `https://bible.usccb.org`.
+   */
+  async getMassFromTrustedUrl(url: string): Promise<Mass | null> {
+    let validUrl: URL;
+    try {
+      validUrl = new URL(url);
+    } catch {
+      throw new USCCBArgumentError("URL must be valid");
+    }
+    if (validUrl.username || validUrl.password) {
+      throw new USCCBArgumentError("URL must not contain credentials");
+    }
     let date: Date | null = null;
     let type: MassType | string | null = null;
     const parsed = parseUrl(url);

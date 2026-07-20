@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { USCCBArgumentError } from "../src/errors.js";
 import {
   addDays,
+  assertUsccbReadingsUrl,
   assertValidDate,
   formatUrlDate,
   getBookFromVerse,
@@ -115,5 +116,41 @@ describe("addDays", () => {
 
   it("throws USCCBArgumentError when given invalid date", () => {
     expect(() => addDays(new Date(NaN), 10)).toThrow(USCCBArgumentError);
+  });
+});
+
+describe("assertUsccbReadingsUrl", () => {
+  it("returns URL object for valid USCCB readings URL", () => {
+    const url = assertUsccbReadingsUrl(
+      "https://bible.usccb.org/bible/readings/080625.cfm"
+    );
+    expect(url.origin).toBe("https://bible.usccb.org");
+    expect(url.pathname).toBe("/bible/readings/080625.cfm");
+  });
+
+  it("throws USCCBArgumentError for non-USCCB origin", () => {
+    expect(() =>
+      assertUsccbReadingsUrl("https://example.com/bible/readings/080625.cfm")
+    ).toThrow(USCCBArgumentError);
+  });
+
+  it("throws USCCBArgumentError for path not starting with /bible/readings/", () => {
+    expect(() =>
+      assertUsccbReadingsUrl("https://bible.usccb.org/other/path/080625.cfm")
+    ).toThrow(USCCBArgumentError);
+  });
+
+  it("throws USCCBArgumentError for URL with username or password", () => {
+    expect(() =>
+      assertUsccbReadingsUrl(
+        "https://admin:secret@bible.usccb.org/bible/readings/080625.cfm"
+      )
+    ).toThrow(USCCBArgumentError);
+  });
+
+  it("throws USCCBArgumentError for invalid URL string", () => {
+    expect(() => assertUsccbReadingsUrl("not-a-url")).toThrow(
+      USCCBArgumentError
+    );
   });
 });

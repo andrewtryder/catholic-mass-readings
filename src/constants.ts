@@ -6,6 +6,8 @@ export const OR_PATTERN = /^OR[:]?$/i;
 
 export const READING_TITLE_FMT = "A reading from the {TITLE}";
 
+export const USCCB_ORIGIN = "https://bible.usccb.org";
+
 export const DAILY_READING_DEFAULT_MSS_URL_FMT =
   "https://bible.usccb.org/bible/readings/{DATE}.cfm";
 export const DAILY_READING_DAWN_MASS_URL_FMT =

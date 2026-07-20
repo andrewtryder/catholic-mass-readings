@@ -40,6 +40,20 @@ class ObolusStore {
 
   reset(origin?: string): void {
     if (origin) {
+      if (!this.solvers.has(origin)) {
+        this.cookies.delete(origin);
+      }
+    } else {
+      for (const key of Array.from(this.cookies.keys())) {
+        if (!this.solvers.has(key)) {
+          this.cookies.delete(key);
+        }
+      }
+    }
+  }
+
+  forceReset(origin?: string): void {
+    if (origin) {
       this.cookies.delete(origin);
       this.solvers.delete(origin);
     } else {
@@ -79,7 +93,7 @@ export function wrapFetchWithObolus(fetchImpl: FetchLike): FetchLike {
 /** Reset cached proof state (for tests and recovery retries). */
 export function resetObolusState(origin?: string): void {
   for (const store of activeStores) {
-    store.reset(origin);
+    store.forceReset(origin);
   }
 }
 

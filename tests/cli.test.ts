@@ -10,6 +10,7 @@ const testDir = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(testDir, "..");
 const mockErrorHelper = join(testDir, "helpers", "mock-net-error.ts");
 const mockSuccessHelper = join(testDir, "helpers", "mock-net-success.ts");
+const mockCircularHelper = join(testDir, "helpers", "mock-circular-error.ts");
 
 async function runCli(
   args: string[],
@@ -120,6 +121,30 @@ describe("CLI process tests", () => {
         "stepDays must be a positive integer; received 1.5"
       );
     });
+
+    it("rejects negative, 0.5, NaN, and Infinity steps on get-mass-range", async () => {
+      for (const stepVal of ["-1", "0.5", "abc", "Infinity"]) {
+        const result = await runCli([
+          "get-mass-range",
+          "--start",
+          "2026-07-01",
+          "--step",
+          stepVal,
+        ]);
+        expect(result.exitCode).toBe(1);
+        expect(result.stderr).toContain("[ERROR]");
+        expect(result.stderr).toContain("stepDays must be a positive integer");
+      }
+    });
+
+    it("rejects impossible calendar dates such as 31st of April or month 0", async () => {
+      for (const dateVal of ["2026-04-31", "2026-00-10", "2026-13-01"]) {
+        const result = await runCli(["get-mass", "--date", dateVal]);
+        expect(result.exitCode).toBe(1);
+        expect(result.stderr).toContain("[ERROR]");
+        expect(result.stderr).toContain("Expected valid calendar date");
+      }
+    });
   });
 
   describe("network failures", () => {
@@ -145,6 +170,16 @@ describe("CLI process tests", () => {
   });
 
   describe("normal error output", () => {
+    it("handles circular error objects without recursion or stack overflow", async () => {
+      const result = await runCli(["get-mass-types", "--date", "2026-07-20"], {
+        importHelper: mockCircularHelper,
+      });
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).not.toContain("Maximum call stack size exceeded");
+      expect(result.stderr).toContain("[ERROR]");
+      expect(result.stderr).toContain("Circular error occurred");
+    });
+
     it("outputs error when passing invalid mass type", async () => {
       const result = await runCli(["get-mass", "--type", "INVALID_TYPE"]);
       expect(result.exitCode).toBe(1);

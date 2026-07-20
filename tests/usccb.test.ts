@@ -198,6 +198,52 @@ describe("getMassFromUrl", () => {
     expect(mass!.date?.toISOString().slice(0, 10)).toBe("2025-08-06");
     expect(mass!.type).toBe(MassType.DEFAULT);
   });
+
+  it("throws USCCBArgumentError for non-USCCB URLs", async () => {
+    const usccb = new USCCB();
+    await expect(
+      usccb.getMassFromUrl("https://example.com/bible/readings/080625.cfm")
+    ).rejects.toThrow(USCCBArgumentError);
+  });
+
+  it("throws USCCBArgumentError for credentials in URL", async () => {
+    const usccb = new USCCB();
+    await expect(
+      usccb.getMassFromUrl(
+        "https://admin:pass@bible.usccb.org/bible/readings/080625.cfm"
+      )
+    ).rejects.toThrow(USCCBArgumentError);
+  });
+});
+
+describe("getMassFromTrustedUrl", () => {
+  it("allows non-USCCB URLs when explicitly invoked", async () => {
+    const usccb = new USCCB(
+      createMockClient(join(dataDir, "mass-single-reading.html"))
+    );
+    const mass = await usccb.getMassFromTrustedUrl(
+      "https://internal-mirror.example.org/readings/080625.cfm"
+    );
+    expect(mass).not.toBeNull();
+    expect(mass!.date?.toISOString().slice(0, 10)).toBe("2025-08-06");
+    expect(mass!.type).toBe(MassType.DEFAULT);
+  });
+
+  it("throws USCCBArgumentError for credentials in trusted URL", async () => {
+    const usccb = new USCCB();
+    await expect(
+      usccb.getMassFromTrustedUrl(
+        "https://admin:pass@internal-mirror.example.org/readings/080625.cfm"
+      )
+    ).rejects.toThrow(USCCBArgumentError);
+  });
+
+  it("throws USCCBArgumentError for invalid URL strings", async () => {
+    const usccb = new USCCB();
+    await expect(usccb.getMassFromTrustedUrl("not-a-url")).rejects.toThrow(
+      USCCBArgumentError
+    );
+  });
 });
 
 describe("getMassTypes", () => {

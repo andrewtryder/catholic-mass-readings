@@ -2,8 +2,7 @@ import type { CreateFetchClientOptions, HttpClient } from "./http.js";
 import { createFetchClient } from "./http.js";
 
 /**
- * Create an HTTP client recommended for live USCCB requests in Node.js.
- * The CLI uses this by default.
+ * Creates the recommended Node.js HTTP client. It uses the optional Impit backend when available and falls back to the platform Fetch API.
  */
 export async function createNodeHttpClient(
   options: CreateFetchClientOptions = {}

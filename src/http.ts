@@ -1,4 +1,4 @@
-import { USCCBError, USCCBNetworkError } from "./errors.js";
+import { USCCBArgumentError, USCCBError, USCCBNetworkError } from "./errors.js";
 import {
   type FetchLike,
   type FetchResult,
@@ -63,6 +63,16 @@ export function combineSignals(
   timeoutMs?: number,
   callerSignal?: AbortSignal
 ): AbortSignal | undefined {
+  if (
+    timeoutMs !== undefined &&
+    (!Number.isFinite(timeoutMs) ||
+      timeoutMs < 0 ||
+      !Number.isInteger(timeoutMs))
+  ) {
+    throw new USCCBArgumentError(
+      `timeoutMs must be a non-negative integer; received '${timeoutMs}'`
+    );
+  }
   const timeoutSignal =
     timeoutMs !== undefined && timeoutMs > 0
       ? AbortSignal.timeout(timeoutMs)
@@ -107,6 +117,37 @@ export function createFetchClient(
   fetchImpl: FetchLike = fetch as unknown as FetchLike,
   options: CreateFetchClientOptions = {}
 ): HttpClient {
+  if (
+    options.timeoutMs !== undefined &&
+    (!Number.isFinite(options.timeoutMs) ||
+      options.timeoutMs < 0 ||
+      !Number.isInteger(options.timeoutMs))
+  ) {
+    throw new USCCBArgumentError(
+      `timeoutMs must be a non-negative integer; received '${options.timeoutMs}'`
+    );
+  }
+  if (
+    options.maxResponseSizeBytes !== undefined &&
+    (!Number.isFinite(options.maxResponseSizeBytes) ||
+      options.maxResponseSizeBytes < 0 ||
+      !Number.isInteger(options.maxResponseSizeBytes))
+  ) {
+    throw new USCCBArgumentError(
+      `maxResponseSizeBytes must be a non-negative integer; received '${options.maxResponseSizeBytes}'`
+    );
+  }
+  if (
+    options.maxRedirects !== undefined &&
+    (!Number.isFinite(options.maxRedirects) ||
+      options.maxRedirects < 0 ||
+      !Number.isInteger(options.maxRedirects))
+  ) {
+    throw new USCCBArgumentError(
+      `maxRedirects must be a non-negative integer; received '${options.maxRedirects}'`
+    );
+  }
+
   const {
     useDefaultHeaders = true,
     obolus = true,
@@ -114,7 +155,9 @@ export function createFetchClient(
     maxResponseSizeBytes = MAX_RESPONSE_SIZE_BYTES,
     maxRedirects = MAX_REDIRECTS,
   } = options;
-  const resolvedFetch = obolus ? wrapFetchWithObolus(fetchImpl) : fetchImpl;
+  const resolvedFetch = obolus
+    ? wrapFetchWithObolus(fetchImpl, { maxResponseSizeBytes })
+    : fetchImpl;
 
   async function executeRequest(
     urlStr: string,

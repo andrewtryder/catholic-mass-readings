@@ -105,10 +105,7 @@ function parseMassTypes(values: string[] | undefined): MassType[] | undefined {
   });
 }
 
-async function writeJson(
-  path: string,
-  data: Record<string, unknown> | Record<string, unknown>[]
-): Promise<void> {
+async function writeJson(path: string, data: unknown): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, JSON.stringify(data, null, 4), "utf-8");
 }

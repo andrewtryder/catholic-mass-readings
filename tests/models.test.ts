@@ -4,13 +4,19 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import {
+  Mass,
   MassType,
+  Reading,
+  Section,
   SectionType,
+  SerializedMass,
   formatReading,
   formatReadingCitations,
   massToDict,
   massToString,
   readingHeader,
+  readingToDict,
+  sectionToDict,
   verseToDict,
   Verse,
 } from "../src/models.js";
@@ -35,9 +41,7 @@ describe("citations output format", () => {
     );
     const dict = massToDict(mass, "citations");
 
-    for (const section of dict.sections as Array<{
-      readings: Array<Record<string, unknown>>;
-    }>) {
+    for (const section of dict.sections) {
       for (const reading of section.readings) {
         expect(reading.text).toBeUndefined();
         expect(reading.verses).toBeDefined();
@@ -160,5 +164,83 @@ describe("verseToDict", () => {
       link: "",
       book: "Genesis",
     });
+  });
+});
+
+describe("dictionary serialization and DTOs", () => {
+  const sampleVerse: Verse = {
+    text: "John 1:1",
+    link: "https://example.com/john/1?1",
+    book: "John",
+  };
+  const sampleReading: Reading = {
+    verses: [sampleVerse],
+    text: "In the beginning was the Word.",
+  };
+  const sampleSection: Section = {
+    type: SectionType.GOSPEL,
+    header: "Gospel",
+    readings: [sampleReading],
+  };
+
+  it("readingToDict returns SerializedReading respecting format option", () => {
+    const full = readingToDict(sampleReading, "full");
+    expect(full).toEqual({
+      verses: [verseToDict(sampleVerse)],
+      text: "In the beginning was the Word.",
+    });
+
+    const citations = readingToDict(sampleReading, "citations");
+    expect(citations).toEqual({
+      verses: [verseToDict(sampleVerse)],
+    });
+    expect(citations.text).toBeUndefined();
+  });
+
+  it("sectionToDict returns SerializedSection with nested readings", () => {
+    const dict = sectionToDict(sampleSection, "citations");
+    expect(dict).toEqual({
+      type: SectionType.GOSPEL,
+      header: "Gospel",
+      readings: [{ verses: [verseToDict(sampleVerse)] }],
+    });
+  });
+
+  it("massToDict serializes type_ consistently even when MassType is DEFAULT ('')", () => {
+    const defaultMass: Mass = {
+      date: new Date(2025, 7, 6), // Aug 6 2025
+      type: MassType.DEFAULT,
+      url: "https://example.com/mass",
+      title: "Transfiguration",
+      sections: [sampleSection],
+    };
+    const serialized: SerializedMass = massToDict(defaultMass);
+    expect(serialized.type_).toBe("");
+    expect(serialized.date).toBe("2025-08-06");
+  });
+
+  it("massToDict serializes type_ when MassType is DAY", () => {
+    const dayMass: Mass = {
+      date: new Date(2025, 11, 25),
+      type: MassType.DAY,
+      url: "https://example.com/day",
+      title: "Christmas Day",
+      sections: [],
+    };
+    const serialized = massToDict(dayMass);
+    expect(serialized.type_).toBe("DAY");
+  });
+
+  it("massToDict omits type_ only when mass.type is null or undefined", () => {
+    const nullTypeMass: Mass = {
+      date: null,
+      type: null,
+      url: "https://example.com/null",
+      title: "No Date Or Type",
+      sections: [],
+    };
+    const serialized = massToDict(nullTypeMass);
+    expect("type_" in serialized).toBe(false);
+    expect("date" in serialized).toBe(false);
   });
 });

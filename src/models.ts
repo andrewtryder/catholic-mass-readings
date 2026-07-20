@@ -116,7 +116,32 @@ export function verseBookTitle(verse: Verse): string | null {
   return details?.title ?? null;
 }
 
-export function verseToDict(verse: Verse): Record<string, unknown> {
+export interface SerializedVerse {
+  text: string;
+  link: string;
+  book: string | null;
+}
+
+export interface SerializedReading {
+  verses: SerializedVerse[];
+  text?: string;
+}
+
+export interface SerializedSection {
+  type: SectionType;
+  header: string;
+  readings: SerializedReading[];
+}
+
+export interface SerializedMass {
+  url: string;
+  title: string;
+  sections: SerializedSection[];
+  date?: string;
+  type_?: MassType | string | null;
+}
+
+export function verseToDict(verse: Verse): SerializedVerse {
   return { text: verse.text, link: verse.link, book: verse.book };
 }
 
@@ -174,8 +199,8 @@ export function readingWithText(reading: Reading, text: string): Reading {
 export function readingToDict(
   reading: Reading,
   format: OutputFormat = "full"
-): Record<string, unknown> {
-  const result: Record<string, unknown> = {
+): SerializedReading {
+  const result: SerializedReading = {
     verses: reading.verses.map(verseToDict),
   };
   if (format === "full") {
@@ -246,7 +271,7 @@ export function sectionToString(
 export function sectionToDict(
   section: Section,
   format: OutputFormat = "full"
-): Record<string, unknown> {
+): SerializedSection {
   return {
     type: section.type,
     header: section.header,
@@ -288,8 +313,8 @@ export function massToString(
 export function massToDict(
   mass: Mass,
   format: OutputFormat = "full"
-): Record<string, unknown> {
-  const result: Record<string, unknown> = {
+): SerializedMass {
+  const result: SerializedMass = {
     url: mass.url,
     title: mass.title,
     sections: mass.sections.map((s) => sectionToDict(s, format)),
@@ -297,7 +322,7 @@ export function massToDict(
   if (mass.date) {
     result.date = formatIsoDate(mass.date);
   }
-  if (mass.type) {
+  if (mass.type !== null && mass.type !== undefined) {
     result.type_ = mass.type;
   }
   return result;

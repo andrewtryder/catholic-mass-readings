@@ -252,7 +252,8 @@ describe("createFetchClient redirect and security limits with Obolus enabled (de
       .fn()
       .mockImplementation(async (input: string | URL | Request) => {
         const urlStr = typeof input === "string" ? input : input.toString();
-        if (urlStr.includes("bible.usccb.org")) {
+        const parsedUrl = new URL(urlStr);
+        if (parsedUrl.hostname === "bible.usccb.org") {
           return mockFetchResponse({
             status: 302,
             headers: {

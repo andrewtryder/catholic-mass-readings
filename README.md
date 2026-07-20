@@ -7,7 +7,7 @@
 
 A fast, easy-to-use tool and JavaScript/TypeScript library for fetching official Daily Mass readings directly from the **[United States Conference of Catholic Bishops (USCCB)](https://bible.usccb.org/bible/readings/)**.
 
-Whether you are a parish volunteer preparing a weekly bulletin, a catechist or liturgy coordinator double-checking upcoming readings, a student of Scripture, or a developer building a Catholic web or mobile application, this package gives you instant, structured access to official Scripture texts, responsorial psalms, alleluia verses, and Bible citations.
+Whether you are a parish volunteer preparing a weekly bulletin, a catechist or liturgy coordinator double-checking upcoming readings, a student of Scripture, or a developer building a server-side backend for a Catholic web or mobile application, this package gives you instant, structured access to official Scripture texts, responsorial psalms, alleluia verses, and Bible citations.
 
 ---
 
@@ -16,7 +16,7 @@ Whether you are a parish volunteer preparing a weekly bulletin, a catechist or l
 - 📖 **Quickly Look Up Readings**: View the First Reading, Responsorial Psalm, Second Reading, and Gospel for today or any specific date right from your computer's command line—**no coding required**.
 - 📂 **Export to JSON**: Easily save Scripture texts and citations to JSON files for newsletters, parish slides, display boards, or personal study.
 - ⛪ **Support for All Mass Types**: Automatically handles Sunday celebrations, Daily Masses, and special liturgical variations (`Vigil`, `Dawn`, `Day`, `Night`, `Year A/B/C`).
-- 🛠️ **Developer & App Ready**: Embed daily readings directly into Node.js, web, or mobile apps with full TypeScript support and verified parsing accuracy.
+- 🛠️ **Developer & App Ready**: Integrate daily readings into server-side web or mobile backends with full TypeScript support and verified parsing accuracy.
 
 ---
 
@@ -140,7 +140,7 @@ npm install catholic-mass-readings
 import { USCCB, MassType, createNodeHttpClient } from "catholic-mass-readings";
 
 async function main() {
-  // Initialize the USCCB client using Node's native HTTP fetcher
+  // Creates the recommended Node.js HTTP client (uses Impit when available, falls back to platform Fetch)
   const usccb = new USCCB(await createNodeHttpClient());
 
   // Fetch readings for a specific date and Mass type
@@ -180,48 +180,22 @@ Full API definitions, interfaces (`Mass`, `Section`, `Reading`, `Verse`), and Ty
 
 ---
 
-## Contributing & Development
+## Contributing & Developer Guide
 
-We welcome contributions! Whether it's reporting broken layouts from USCCB updates, suggesting new CLI options, or improving documentation.
+If you are interested in contributing, running tests, or understanding the project's architecture and CI/CD workflows, please check out our developer documentation:
 
-### Local Development Setup
-
-Requires **Node.js 24** (see `.nvmrc`).
-
-```bash
-git clone https://github.com/andrewtryder/catholic-mass-readings.git
-cd catholic-mass-readings
-npm install
-
-# Run the complete verification suite (format, lint, typecheck, tests, build)
-npm run verify
-
-# Generate TypeDoc documentation locally
-npm run docs
-```
-
-See **[CONTRIBUTING.md](CONTRIBUTING.md)** for commit conventions (`Conventional Commits`) and pull request guidelines.
-
-<details>
-<summary><b>View CI/CD & Publishing Workflows</b></summary>
-
-| Workflow                    | Trigger                      | Purpose                                                                                    |
-| :-------------------------- | :--------------------------- | :----------------------------------------------------------------------------------------- |
-| `ci.yml`                    | Pull request                 | Runs formatting checks, linting, typechecking, tests with coverage, and build              |
-| `semantic-pull-request.yml` | Pull request                 | Enforces `Conventional Commits` format for PR titles                                       |
-| `release-please.yml`        | Push to `main`               | Manages automated changelogs and version bumps; publishes to npm and GitHub Pages on merge |
-| `publish.yml`               | Manual (`workflow_dispatch`) | Fallback manual workflow for npm publishing                                                |
-| `docs.yml`                  | Manual (`workflow_dispatch`) | Fallback manual workflow for docs deployment                                               |
-| `codeql.yml`                | PR & Schedule                | Automated security static analysis                                                         |
-| `dependency-review.yml`     | Pull request                 | Scans and flags vulnerable dependency changes                                              |
-
-For release procedures and configuration, see [PUBLISHING.md](PUBLISHING.md).
-</details>
+- 🛠️ **[Developer Guide (DEVELOPMENT.md)](DEVELOPMENT.md)** — Local setup, verification suite, architecture, and workflow details
+- 🤝 **[Contributing Guidelines (CONTRIBUTING.md)](CONTRIBUTING.md)** — Conventional Commits, pull request rules, and code standards
+- 📦 **[Publishing Guide (PUBLISHING.md)](PUBLISHING.md)** — Release procedures and npm publishing setup
 
 ---
 
-## Acknowledgments & License
+## Content Notice & License
 
-This project is a TypeScript port and expansion of [`rcolfin/catholic-mass-readings`](https://github.com/rcolfin/catholic-mass-readings).
+### Software License
 
-Licensed under the **[Apache-2.0 License](LICENSE)**.
+The source code of **catholic-mass-readings** (including our CLI and parsing library) is licensed under the **[Apache-2.0 License](LICENSE)**. This project is a TypeScript port and expansion of [`rcolfin/catholic-mass-readings`](https://github.com/rcolfin/catholic-mass-readings).
+
+### Scripture Content Notice
+
+This package retrieves Scripture texts, verse citations, and liturgical content directly from the **[United States Conference of Catholic Bishops (USCCB)](https://bible.usccb.org/bible/readings/)** website. The Apache-2.0 software license covers only the code in this repository and does not grant copyright or usage rights in the retrieved Scripture text or liturgical content. Users are responsible for complying with the applicable **[USCCB Terms of Use and Copyright Guidelines](https://www.usccb.org/)** when reproducing, displaying, or distributing fetched readings in their own applications or publications.

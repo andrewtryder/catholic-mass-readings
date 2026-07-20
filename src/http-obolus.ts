@@ -1,4 +1,5 @@
 import { USCCB_ORIGIN } from "./constants.js";
+import { USCCBArgumentError } from "./errors.js";
 import { isObolusChallenge, solveObolusChallenge } from "./obolus.js";
 import { readBoundedText } from "./http-body.js";
 
@@ -80,6 +81,16 @@ export function wrapFetchWithObolus(
   fetchImpl: FetchLike,
   options: WrapObolusOptions = {}
 ): ObolusFetchLike {
+  if (
+    options.maxResponseSizeBytes !== undefined &&
+    (!Number.isFinite(options.maxResponseSizeBytes) ||
+      options.maxResponseSizeBytes < 0 ||
+      !Number.isInteger(options.maxResponseSizeBytes))
+  ) {
+    throw new USCCBArgumentError(
+      `maxResponseSizeBytes must be a non-negative integer; received '${options.maxResponseSizeBytes}'`
+    );
+  }
   const store = new ObolusStore();
   activeStores.add(new WeakRef(store));
   const maxBytes = options.maxResponseSizeBytes ?? 3 * 1024 * 1024;

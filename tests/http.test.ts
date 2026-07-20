@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { createFetchClient } from "../src/http.js";
-import { USCCBNetworkError } from "../src/errors.js";
+import { combineSignals, createFetchClient } from "../src/http.js";
+import { USCCBArgumentError, USCCBNetworkError } from "../src/errors.js";
 
 function mockFetchResponse(options: {
   status?: number;
@@ -313,5 +313,59 @@ describe("createFetchClient redirect and security limits with Obolus enabled (de
     const client = createFetchClient(fetchImpl, { obolus: true });
     expect(typeof client.reset).toBe("function");
     expect(() => client.reset?.()).not.toThrow();
+  });
+});
+
+describe("option and timeout validation", () => {
+  it("createFetchClient rejects negative, fractional, and nonfinite timeoutMs", () => {
+    expect(() => createFetchClient(vi.fn(), { timeoutMs: -1 })).toThrow(
+      USCCBArgumentError
+    );
+    expect(() => createFetchClient(vi.fn(), { timeoutMs: 10.5 })).toThrow(
+      USCCBArgumentError
+    );
+    expect(() => createFetchClient(vi.fn(), { timeoutMs: NaN })).toThrow(
+      USCCBArgumentError
+    );
+    expect(() => createFetchClient(vi.fn(), { timeoutMs: Infinity })).toThrow(
+      USCCBArgumentError
+    );
+  });
+
+  it("createFetchClient rejects negative, fractional, and nonfinite maxResponseSizeBytes", () => {
+    expect(() =>
+      createFetchClient(vi.fn(), { maxResponseSizeBytes: -1 })
+    ).toThrow(USCCBArgumentError);
+    expect(() =>
+      createFetchClient(vi.fn(), { maxResponseSizeBytes: 100.5 })
+    ).toThrow(USCCBArgumentError);
+    expect(() =>
+      createFetchClient(vi.fn(), { maxResponseSizeBytes: NaN })
+    ).toThrow(USCCBArgumentError);
+    expect(() =>
+      createFetchClient(vi.fn(), { maxResponseSizeBytes: Infinity })
+    ).toThrow(USCCBArgumentError);
+  });
+
+  it("createFetchClient rejects negative, fractional, and nonfinite maxRedirects", () => {
+    expect(() => createFetchClient(vi.fn(), { maxRedirects: -1 })).toThrow(
+      USCCBArgumentError
+    );
+    expect(() => createFetchClient(vi.fn(), { maxRedirects: 2.5 })).toThrow(
+      USCCBArgumentError
+    );
+    expect(() => createFetchClient(vi.fn(), { maxRedirects: NaN })).toThrow(
+      USCCBArgumentError
+    );
+    expect(() =>
+      createFetchClient(vi.fn(), { maxRedirects: Infinity })
+    ).toThrow(USCCBArgumentError);
+  });
+
+  it("combineSignals rejects negative, fractional, and nonfinite timeoutMs override", () => {
+    expect(() => combineSignals(-100)).toThrow(USCCBArgumentError);
+    expect(() => combineSignals(5.5)).toThrow(USCCBArgumentError);
+    expect(() => combineSignals(NaN)).toThrow(USCCBArgumentError);
+    expect(() => combineSignals(Infinity)).toThrow(USCCBArgumentError);
   });
 });

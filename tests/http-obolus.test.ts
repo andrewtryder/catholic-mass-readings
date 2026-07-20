@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { resetObolusState, wrapFetchWithObolus } from "../src/http-obolus.js";
+import { USCCBArgumentError } from "../src/errors.js";
 
 vi.mock("../src/obolus.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/obolus.js")>();
@@ -239,5 +240,20 @@ describe("wrapFetchWithObolus", () => {
     expect(fetchImpl1).toHaveBeenCalledTimes(4);
 
     expect(() => resetObolusState()).not.toThrow();
+  });
+
+  it("rejects negative, fractional, and nonfinite maxResponseSizeBytes", () => {
+    expect(() =>
+      wrapFetchWithObolus(vi.fn(), { maxResponseSizeBytes: -1 })
+    ).toThrow(USCCBArgumentError);
+    expect(() =>
+      wrapFetchWithObolus(vi.fn(), { maxResponseSizeBytes: 50.5 })
+    ).toThrow(USCCBArgumentError);
+    expect(() =>
+      wrapFetchWithObolus(vi.fn(), { maxResponseSizeBytes: NaN })
+    ).toThrow(USCCBArgumentError);
+    expect(() =>
+      wrapFetchWithObolus(vi.fn(), { maxResponseSizeBytes: Infinity })
+    ).toThrow(USCCBArgumentError);
   });
 });

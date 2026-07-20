@@ -25,6 +25,11 @@
       "matchUpdateTypes": ["major"],
       "groupName": "major dependency updates",
       "groupSlug": "major-dependencies"
+    },
+    {
+      "matchPackageNames": ["@types/node"],
+      "allowedVersions": "20.x",
+      "groupName": "minimum Node compatibility types"
     }
   ]
 }

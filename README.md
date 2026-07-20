@@ -124,6 +124,37 @@ catholic-mass-readings get-mass-range --start 2024-12-25 --end 2025-01-22 --step
 catholic-mass-readings get-sunday-mass-range --start 2024-12-01 --end 2024-12-31 --save december-sundays.json
 ```
 
+#### Concurrency and error handling
+
+By default, `get-mass-range` fetches up to **3 dates simultaneously**. You can raise or lower
+this with `--concurrency`:
+
+```bash
+# Limit simultaneous requests (default is 3)
+catholic-mass-readings get-mass-range \
+  --start 2026-01-01 \
+  --end 2026-02-01 \
+  --step 1 \
+  --concurrency 3
+```
+
+By default, **any** missing or failed date causes the command to exit with code `1`. Use
+`--allow-partial` to exit with code `0` as long as at least one date succeeds:
+
+```bash
+# Return exit code 0 when at least one date succeeds
+catholic-mass-readings get-mass-range \
+  --start 2026-01-01 \
+  --end 2026-02-01 \
+  --allow-partial
+```
+
+| Scenario                       | Without `--allow-partial` | With `--allow-partial` |
+| ------------------------------ | ------------------------- | ---------------------- |
+| All dates succeed              | exit 0                    | exit 0                 |
+| Some dates fail or are missing | exit 1                    | exit 0                 |
+| All dates fail                 | exit 1                    | exit 1                 |
+
 ---
 
 ## For Developers: Library Usage

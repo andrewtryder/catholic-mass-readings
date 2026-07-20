@@ -36,20 +36,27 @@ export class USCCBNetworkError extends USCCBError {
 
   constructor(
     message: string,
-    optionsOrCause: USCCBNetworkErrorOptions | unknown = {}
+    optionsOrCause?: USCCBNetworkErrorOptions | unknown
   ) {
     super(message);
     this.name = "USCCBNetworkError";
+
+    if (optionsOrCause === undefined) {
+      this.options = {};
+      return;
+    }
+
     if (isNetworkErrorOptions(optionsOrCause)) {
       this.options = optionsOrCause;
       this.cause = optionsOrCause.cause;
       this.status = optionsOrCause.status;
       this.url = optionsOrCause.url;
       this.retryable = optionsOrCause.retryable;
-    } else {
-      this.options = { cause: optionsOrCause };
-      this.cause = optionsOrCause;
+      return;
     }
+
+    this.options = { cause: optionsOrCause };
+    this.cause = optionsOrCause;
   }
 }
 

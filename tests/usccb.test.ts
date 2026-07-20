@@ -406,12 +406,119 @@ describe("getMassTypes", () => {
       USCCBArgumentError
     );
   });
+
+  it("returns [] when every probe is 404 (date has no Mass)", async () => {
+    const usccb = new USCCB({
+      async get() {
+        return { text: "", ok: true, status: 200, url: "" };
+      },
+      async head(url: string) {
+        return { text: "", ok: false, status: 404, url };
+      },
+    });
+    const types = await usccb.getMassTypes(parseIsoDate("2025-08-06"));
+    expect(types).toEqual([]);
+  });
+
+  it("throws USCCBNetworkError when all probes are 403 (block/outage)", async () => {
+    const usccb = new USCCB({
+      async get() {
+        return { text: "", ok: true, status: 200, url: "" };
+      },
+      async head(url: string) {
+        return { text: "", ok: false, status: 403, url };
+      },
+    });
+    await expect(
+      usccb.getMassTypes(parseIsoDate("2025-08-06"))
+    ).rejects.toThrow(USCCBNetworkError);
+  });
+
+  it("throws USCCBNetworkError when all probes are 503 (server outage)", async () => {
+    const usccb = new USCCB({
+      async get() {
+        return { text: "", ok: true, status: 200, url: "" };
+      },
+      async head(url: string) {
+        return { text: "", ok: false, status: 503, url };
+      },
+    });
+    const err = await usccb
+      .getMassTypes(parseIsoDate("2025-08-06"))
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(USCCBNetworkError);
+    expect((err as USCCBNetworkError).retryable).toBe(true);
+  });
+
+  it("throws USCCBNetworkError when probes are a mix of 404 and rejections", async () => {
+    const usccb = new USCCB({
+      async get() {
+        return { text: "", ok: true, status: 200, url: "" };
+      },
+      async head(url: string) {
+        if (url.includes("-Day.cfm")) {
+          throw new Error("DNS failure");
+        }
+        return { text: "", ok: false, status: 404, url };
+      },
+    });
+    await expect(
+      usccb.getMassTypes(parseIsoDate("2025-08-06"))
+    ).rejects.toThrow(USCCBNetworkError);
+  });
+
+  it("returns only successful types when some probes fail", async () => {
+    const usccb = new USCCB({
+      async get() {
+        return { text: "", ok: true, status: 200, url: "" };
+      },
+      async head(url: string) {
+        if (url.includes("-Day.cfm")) {
+          return { text: "", ok: true, status: 200, url };
+        }
+        if (url.includes("-Vigil.cfm")) {
+          return { text: "", ok: false, status: 503, url };
+        }
+        return { text: "", ok: false, status: 404, url };
+      },
+    });
+    const types = await usccb.getMassTypes(parseIsoDate("2025-08-06"));
+    expect(types).toEqual([MassType.DAY]);
+  });
 });
 
 describe("parseMassType", () => {
   it("parses case-insensitively", () => {
     expect(parseMassType("vigil")).toBe(MassType.VIGIL);
     expect(parseMassType("YearA")).toBe(MassType.YEARA);
+  });
+});
+
+describe("USCCBNetworkError", () => {
+  it("has no cause when constructed with only a message", () => {
+    const err = new USCCBNetworkError("Request failed");
+    expect(err.cause).toBeUndefined();
+    expect(err.options).toEqual({});
+    expect(err.message).toBe("Request failed");
+  });
+
+  it("preserves cause when passed as a plain error object", () => {
+    const cause = new Error("underlying error");
+    const err = new USCCBNetworkError("Wrapped", cause);
+    expect(err.cause).toBe(cause);
+    expect(err.options.cause).toBe(cause);
+  });
+
+  it("reads structured options fields correctly", () => {
+    const err = new USCCBNetworkError("Network error", {
+      status: 503,
+      retryable: true,
+      url: "https://example.com",
+    });
+    expect(err.status).toBe(503);
+    expect(err.retryable).toBe(true);
+    expect(err.url).toBe("https://example.com");
+    expect(err.cause).toBeUndefined();
   });
 });
 

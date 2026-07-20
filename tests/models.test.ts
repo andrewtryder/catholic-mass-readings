@@ -5,9 +5,12 @@ import { describe, expect, it } from "vitest";
 
 import {
   MassType,
+  SectionType,
+  formatReading,
   formatReadingCitations,
   massToDict,
   massToString,
+  readingHeader,
   verseToDict,
   Verse,
 } from "../src/models.js";
@@ -79,6 +82,30 @@ describe("citations output format", () => {
     expect(
       formatReadingCitations(gospelSection!.readings[1], gospelSection!)
     ).toContain("Luke 12:35-40");
+  });
+
+  it("readingHeader falls back to raw citations when book is missing", () => {
+    const reading = {
+      verses: [{ text: "Some Book 1:1-2", link: "", book: null }],
+      text: "Reading text",
+    };
+    expect(readingHeader(reading)).toBe("Some Book 1:1-2");
+  });
+
+  it("formatReading omits null title when readingTitle returns null", () => {
+    const reading = {
+      verses: [{ text: "Unknown Book 1:1", link: "", book: null }],
+      text: "Reading text",
+    };
+    const section = {
+      type: SectionType.READING,
+      header: "Reading 1",
+      readings: [reading],
+    };
+    const formatted = formatReading(reading, section);
+    expect(formatted).not.toContain("null");
+    expect(formatted).toContain("First Reading: Unknown Book 1:1");
+    expect(formatted).toContain("Reading text");
   });
 });
 

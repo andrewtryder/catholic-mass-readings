@@ -95,13 +95,12 @@ describe("USCCB static helpers", () => {
     expect(dates[0].toISOString().slice(0, 10)).toBe("2025-01-12");
   });
 
-  it("getSundayMassDates adjusts end when before first Sunday", () => {
+  it("getSundayMassDates returns empty array when range ends before first Sunday", () => {
     const dates = USCCB.getSundayMassDates(
       parseIsoDate("2025-01-06"),
       parseIsoDate("2025-01-07")
     );
-    expect(dates).toHaveLength(1);
-    expect(dates[0].toISOString().slice(0, 10)).toBe("2025-01-12");
+    expect(dates).toEqual([]);
   });
 
   it("getMassDates rejects non-positive or non-integer stepDays", () => {
@@ -149,6 +148,15 @@ describe("cleanText", () => {
 
   it("adds space after period", () => {
     expect(cleanText("Hello.World")).toContain("Hello. World");
+  });
+
+  it("preserves newlines while collapsing horizontal whitespace", () => {
+    expect(cleanText("Paragraph one.\n\nParagraph two.")).toBe(
+      "Paragraph one.\n\nParagraph two."
+    );
+    expect(cleanText("Line one\r\nLine two\n\n\nLine three")).toBe(
+      "Line one\n\nLine two\n\nLine three"
+    );
   });
 });
 
@@ -253,6 +261,23 @@ describe("getMassTypes", () => {
         return { text: "", ok: true, status: 200, url: "" };
       },
       async head(url: string) {
+        const isDefault = url.endsWith("080625.cfm");
+        return { text: "", ok: isDefault, status: isDefault ? 200 : 404, url };
+      },
+    });
+    const types = await usccb.getMassTypes(parseIsoDate("2025-08-06"));
+    expect(types).toEqual([MassType.DEFAULT]);
+  });
+
+  it("does not reject when one probe fails if others succeed", async () => {
+    const usccb = new USCCB({
+      async get() {
+        return { text: "", ok: true, status: 200, url: "" };
+      },
+      async head(url: string) {
+        if (url.includes("-day.cfm")) {
+          throw new Error("Temporary network error on DAY");
+        }
         const isDefault = url.endsWith("080625.cfm");
         return { text: "", ok: isDefault, status: isDefault ? 200 : 404, url };
       },

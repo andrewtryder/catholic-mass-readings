@@ -1,87 +1,87 @@
 {
-  "date": "2025-08-06",
+  "url": "https://bible.usccb.org/bible/readings/080625.cfm",
+  "title": "Feast of the Transfiguration of the Lord",
   "sections": [
     {
+      "type": "READING",
       "header": "Reading 1",
       "readings": [
         {
-          "text": "As I watched: Thrones were set up and the Ancient One took his throne. His clothing was bright as snow, and the hair on his head as white as wool; his throne was flames of fire, with wheels of burning fire. A surging stream of fire flowed out from where he sat; Thousands upon thousands were ministering to him, and myriads upon myriads attended him. The court was convened and the books were opened. As the visions during the night continued, I saw: One like a Son of man coming, on the clouds of heaven; When he reached the Ancient One and was presented before him, The one like a Son of man received dominion, glory, and kingship; all peoples, nations, and languages serve him. His dominion is an everlasting dominion that shall not be taken away, his kingship shall not be destroyed.",
           "verses": [
             {
-              "book": "Daniel",
+              "text": "Daniel 7:9-10, 13-14",
               "link": "https://bible.usccb.org/bible/Daniel/7?9",
-              "text": "Daniel 7:9-10, 13-14"
+              "book": "Daniel"
             }
-          ]
+          ],
+          "text": "As I watched:\n\nThrones were set up\n\nand\n\nthe Ancient One took his throne.\n\nHis\n\nclothing was bright as snow,\n\nand the hair\n\non his head as white as wool;\n\nhis throne\n\nwas flames of fire,\n\nwith wheels of\n\nburning fire.\n\nA surging stream of fire\n\nflowed\n\nout from where he sat;\n\nThousands upon\n\nthousands were ministering to him,\n\nand\n\nmyriads upon myriads attended him.\n\nThe\n\ncourt was convened and the books were\n\nopened.\n\nAs the visions during the\n\nnight continued, I saw:\n\nOne like a\n\nSon of man coming,\n\non the clouds of\n\nheaven;\n\nWhen he reached the Ancient\n\nOne\n\nand was presented before him,\n\nThe\n\none like a Son of man received dominion,\n\nglory, and kingship;\n\nall peoples,\n\nnations, and languages serve him.\n\nHis\n\ndominion is an everlasting dominion\n\nthat\n\nshall not be taken away,\n\nhis kingship\n\nshall not be destroyed."
         }
-      ],
-      "type": "READING"
+      ]
     },
     {
+      "type": "PSALM",
       "header": "Responsorial Psalm",
       "readings": [
         {
-          "text": "R.(1a and 9a) The Lord is king, the Most High over all the earth. The LORD is king; let the earth rejoice; let the many islands be glad. Clouds and darkness are round about him, justice and judgment are the foundation of his throne. R. The Lord is king, the Most High over all the earth. The mountains melt like wax before the LORD, before the LORD of all the earth. The heavens proclaim his justice, and all peoples see his glory. R. The Lord is king, the Most High over all the earth. Because you, O LORD, are the Most High over all the earth, exalted far above all gods. R. The Lord is king, the Most High over all the earth.",
           "verses": [
             {
-              "book": "Psalms",
+              "text": "Psalm 97:1-2, 5-6, 9",
               "link": "https://bible.usccb.org/bible/Psalms/97?1",
-              "text": "Psalm 97:1-2, 5-6, 9"
+              "book": "Psalms"
             }
-          ]
+          ],
+          "text": "R.(1a and 9a)\n\nThe Lord is king, the Most High over all\n\nthe earth.\n\nThe LORD is king; let the earth rejoice;\n\nlet the many islands be glad.\n\nClouds and darkness are round about him,\n\njustice and judgment are the foundation of his\n\nthrone.\n\nR.\n\nThe Lord is king, the Most High over all\n\nthe earth.\n\nThe mountains melt like wax before the\n\nLORD,\n\nbefore the LORD of all the earth.\n\nThe heavens proclaim his justice,\n\nand all peoples see his glory.\n\nR.\n\nThe Lord is king, the Most High over all\n\nthe earth.\n\nBecause you, O LORD, are the Most High over\n\nall the earth,\n\nexalted far above all gods.\n\nR.\n\nThe Lord is king, the Most High over all\n\nthe earth."
         }
-      ],
-      "type": "PSALM"
+      ]
     },
     {
+      "type": "READING",
       "header": "Reading 2",
       "readings": [
         {
-          "text": "Beloved: We did not follow cleverly devised myths when we made known to you the power and coming of our Lord Jesus Christ, but we had been eyewitnesses of his majesty. For he received honor and glory from God the Father when that unique declaration came to him from the majestic glory, \"This is my Son, my beloved, with whom I am well pleased.\" We ourselves heard this voice come from heaven while we were with him on the holy mountain. Moreover, we possess the prophetic message that is altogether reliable. You will do well to be attentive to it, as to a lamp shining in a dark place, until day dawns and the morning star rises in your hearts.",
           "verses": [
             {
-              "book": "2 Peter",
+              "text": "2 Peter 1:16-19",
               "link": "https://bible.usccb.org/bible/2peter/1?16",
-              "text": "2 Peter 1:16-19"
+              "book": "2 Peter"
             }
-          ]
+          ],
+          "text": "Beloved:\n\nWe did not follow cleverly devised myths\n\nwhen we made known to you\n\nthe power and coming of our Lord Jesus\n\nChrist,\n\nbut we had been eyewitnesses of his\n\nmajesty.\n\nFor he received honor and glory from God the\n\nFather\n\nwhen that unique declaration came to him from\n\nthe majestic glory,\n\n\"This is my Son, my beloved, with whom I am\n\nwell pleased.\"\n\nWe ourselves heard this voice come from\n\nheaven\n\nwhile we were with him on the holy\n\nmountain.\n\nMoreover, we possess the prophetic message\n\nthat is altogether reliable.\n\nYou will do well to be attentive to it,\n\nas to a lamp shining in a dark place,\n\nuntil day dawns and the morning star rises in\n\nyour hearts."
         }
-      ],
-      "type": "READING"
+      ]
     },
     {
+      "type": "ALLELUIA",
       "header": "Alleluia",
       "readings": [
         {
-          "text": "R. Alleluia, alleluia. This is my beloved Son, with whom I am well-pleased; listen to him. R. Alleluia, alleluia.",
           "verses": [
             {
-              "book": "Matthew",
+              "text": "Matthew 17:5c",
               "link": "https://bible.usccb.org/bible/matthew/17?5",
-              "text": "Matthew 17:5c"
+              "book": "Matthew"
             }
-          ]
+          ],
+          "text": "R. Alleluia, alleluia.\n\nThis is my beloved Son, with whom I am\n\nwell-pleased;\n\nlisten to him.\n\nR. Alleluia, alleluia."
         }
-      ],
-      "type": "ALLELUIA"
+      ]
     },
     {
+      "type": "GOSPEL",
       "header": "Gospel",
       "readings": [
         {
-          "text": "Jesus took Peter, John, and James and went up a mountain to pray. While he was praying his face changed in appearance and his clothing became dazzling white. And behold, two men were conversing with him, Moses and Elijah, who appeared in glory and spoke of his exodus that he was going to accomplish in Jerusalem. Peter and his companions had been overcome by sleep, but becoming fully awake, they saw his glory and the two men standing with him. As they were about to part from him, Peter said to Jesus, “Master, it is good that we are here; let us make three tents, one for you, one for Moses, and one for Elijah.” But he did not know what he was saying. While he was still speaking, a cloud came and cast a shadow over them, and they became frightened when they entered the cloud. Then from the cloud came a voice that said, “This is my chosen Son; listen to him.” After the voice had spoken, Jesus was found alone. They fell silent and did not at that time tell anyone what they had seen.",
           "verses": [
             {
-              "book": "Luke",
+              "text": "Luke 9:28b-36",
               "link": "https://bible.usccb.org/bible/luke/9?28",
-              "text": "Luke 9:28b-36"
+              "book": "Luke"
             }
-          ]
+          ],
+          "text": "Jesus took Peter, John, and James\n\nand went up a mountain to pray.\n\nWhile he was praying his face changed in\n\nappearance\n\nand his clothing became dazzling white.\n\nAnd behold, two men were conversing with him,\n\nMoses and Elijah,\n\nwho appeared in glory and spoke of his\n\nexodus\n\nthat he was going to accomplish in\n\nJerusalem.\n\nPeter and his companions had been overcome by\n\nsleep,\n\nbut becoming fully awake,\n\nthey saw his glory and the two men standing\n\nwith him.\n\nAs they were about to part from him, Peter\n\nsaid to Jesus,\n\n“Master, it is good that we are here;\n\nlet us make three tents,\n\none for you, one for Moses, and one for\n\nElijah.”\n\nBut he did not know what he was saying.\n\nWhile he was still speaking,\n\na cloud came and cast a shadow over them,\n\nand they became frightened when they entered\n\nthe cloud.\n\nThen from the cloud came a voice that\n\nsaid,\n\n“This is my chosen Son; listen to him.”\n\nAfter the voice had spoken, Jesus was found\n\nalone.\n\nThey fell silent and did not at that\n\ntime\n\ntell anyone what they had seen."
         }
-      ],
-      "type": "GOSPEL"
+      ]
     }
   ],
-  "title": "Feast of the Transfiguration of the Lord",
-  "url": "https://bible.usccb.org/bible/readings/080625.cfm"
+  "date": "2025-08-06"
 }

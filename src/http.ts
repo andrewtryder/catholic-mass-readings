@@ -4,7 +4,9 @@ import {
   type FetchResult,
   wrapFetchWithObolus,
 } from "./http-obolus.js";
+import { readBoundedText } from "./http-body.js";
 export type { FetchLike, FetchResult };
+export { readBoundedText };
 
 export const DEFAULT_TIMEOUT_MS = 15_000;
 export const MAX_RESPONSE_SIZE_BYTES = 3 * 1024 * 1024; // 3 MB
@@ -33,6 +35,8 @@ export interface HttpClient {
   get(url: string, options?: HttpRequestOptions): Promise<HttpResponse>;
   /** Fetch a URL with HEAD (used to probe available mass types). */
   head(url: string, options?: HttpRequestOptions): Promise<HttpResponse>;
+  /** Reset client-scoped state (such as cached Obolus proof cookies). */
+  reset?(origin?: string): void;
 }
 
 const DEFAULT_HEADERS = {
@@ -94,57 +98,6 @@ function isHtmlOrXmlContentType(contentType: string): boolean {
     lower.includes("application/xml") ||
     lower.includes("text/xml")
   );
-}
-
-async function readBoundedText(
-  response: Pick<Response, "text"> & { body?: unknown },
-  maxBytes: number
-): Promise<string> {
-  const body = response.body as
-    | {
-        getReader?: () => ReadableStreamDefaultReader<Uint8Array>;
-      }
-    | null
-    | undefined;
-
-  if (body && typeof body.getReader === "function") {
-    const reader = body.getReader();
-    const chunks: Uint8Array[] = [];
-    let totalBytes = 0;
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        if (value) {
-          totalBytes += value.byteLength;
-          if (totalBytes > maxBytes) {
-            await reader.cancel("Response exceeded maximum allowed size");
-            throw new USCCBNetworkError(
-              `Response exceeded maximum allowed size of ${maxBytes} bytes`
-            );
-          }
-          chunks.push(value);
-        }
-      }
-      const fullBuffer = new Uint8Array(totalBytes);
-      let offset = 0;
-      for (const chunk of chunks) {
-        fullBuffer.set(chunk, offset);
-        offset += chunk.byteLength;
-      }
-      return new TextDecoder().decode(fullBuffer);
-    } finally {
-      reader.releaseLock?.();
-    }
-  }
-
-  const text = await response.text();
-  if (new TextEncoder().encode(text).byteLength > maxBytes) {
-    throw new USCCBNetworkError(
-      `Response exceeded maximum allowed size of ${maxBytes} bytes`
-    );
-  }
-  return text;
 }
 
 /**
@@ -289,7 +242,7 @@ export function createFetchClient(
     }
   }
 
-  return {
+  const client: HttpClient = {
     async get(
       url: string,
       options?: HttpRequestOptions
@@ -303,4 +256,12 @@ export function createFetchClient(
       return executeRequest(url, "HEAD", options);
     },
   };
+
+  if ("reset" in resolvedFetch && typeof resolvedFetch.reset === "function") {
+    client.reset = (origin?: string) => {
+      (resolvedFetch.reset as (o?: string) => void)(origin);
+    };
+  }
+
+  return client;
 }

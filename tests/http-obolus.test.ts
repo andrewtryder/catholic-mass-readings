@@ -142,7 +142,7 @@ describe("wrapFetchWithObolus", () => {
     expect(fetchImpl2).toHaveBeenCalledTimes(2);
   });
 
-  it("does not forward Obolus proof cookies across cross-origin redirects", async () => {
+  it("returns 3xx redirect responses untouched without following them", async () => {
     const redirectResponse: Pick<Response, "text" | "ok" | "status" | "url"> & {
       headers: Headers;
     } = {
@@ -153,20 +153,17 @@ describe("wrapFetchWithObolus", () => {
       text: async () => "",
     };
 
-    const targetResponse = mockResponse(200, "Redirected successfully");
-
     const fetchImpl = vi
       .fn()
       .mockImplementation(
         async (input: string | URL | Request, init?: RequestInit) => {
-          const urlStr = typeof input === "string" ? input : input.toString();
-          if (urlStr.includes("bible.usccb.org")) {
-            if (init?.headers && new Headers(init.headers).has("Cookie")) {
-              return redirectResponse;
-            }
-            return mockResponse(403, challengeHtml);
+          const cookieHeader = init?.headers
+            ? new Headers(init.headers).get("Cookie")
+            : null;
+          if (cookieHeader?.includes("X_Obolus_Proof")) {
+            return redirectResponse;
           }
-          return targetResponse;
+          return mockResponse(403, challengeHtml);
         }
       );
 
@@ -174,17 +171,12 @@ describe("wrapFetchWithObolus", () => {
     const response = await wrapped(
       "https://bible.usccb.org/bible/readings/080625.cfm"
     );
-    const text = await response.text();
 
-    expect(text).toBe("Redirected successfully");
-    expect(fetchImpl).toHaveBeenCalledTimes(3);
-
-    const lastCallInit = fetchImpl.mock.calls[2][1];
-    expect(
-      lastCallInit?.headers
-        ? new Headers(lastCallInit.headers).has("Cookie")
-        : false
-    ).toBe(false);
+    expect(response.status).toBe(302);
+    expect(response.headers?.get("location")).toBe(
+      "https://evil.example.com/capture"
+    );
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
   it("prevents two concurrent requests from overwriting or resetting each other's active solver state", async () => {
@@ -215,5 +207,37 @@ describe("wrapFetchWithObolus", () => {
     expect(await res1.text()).toContain("Feast of the Transfiguration");
     expect(await res2.text()).toContain("Feast of the Transfiguration");
     expect(challengeResponses).toBe(2);
+  });
+
+  it("enforces response size limit during GET inside Obolus wrapper using readBoundedText", async () => {
+    const largeBody = "x".repeat(200);
+    const fetchImpl = vi.fn(async () => mockResponse(200, largeBody));
+
+    const wrapped = wrapFetchWithObolus(fetchImpl, {
+      maxResponseSizeBytes: 50,
+    });
+
+    await expect(
+      wrapped("https://bible.usccb.org/bible/readings/080625.cfm")
+    ).rejects.toThrow(/exceeded maximum allowed size/i);
+  });
+
+  it("supports client-local reset via wrapped.reset() and prunes dead WeakRef entries", async () => {
+    const fetchImpl1 = vi
+      .fn()
+      .mockResolvedValueOnce(mockResponse(403, challengeHtml))
+      .mockResolvedValueOnce(mockResponse(200, successHtml))
+      .mockResolvedValueOnce(mockResponse(403, challengeHtml))
+      .mockResolvedValueOnce(mockResponse(200, successHtml));
+
+    const wrapped1 = wrapFetchWithObolus(fetchImpl1);
+    await wrapped1("https://bible.usccb.org/bible/readings/080625.cfm");
+    expect(fetchImpl1).toHaveBeenCalledTimes(2);
+
+    wrapped1.reset();
+    await wrapped1("https://bible.usccb.org/bible/readings/080625.cfm");
+    expect(fetchImpl1).toHaveBeenCalledTimes(4);
+
+    expect(() => resetObolusState()).not.toThrow();
   });
 });

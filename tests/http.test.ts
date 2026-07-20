@@ -187,9 +187,98 @@ describe("createFetchClient resource limits and security", () => {
 
     await expect(
       client.get("https://bible.usccb.org/bible/readings/010125.cfm")
-    ).rejects.toThrow(USCCBNetworkError);
+    ).rejects.toThrow(/exceeded maximum allowed size/i);
+  });
+});
+
+describe("createFetchClient redirect and security limits with Obolus enabled (default)", () => {
+  it("enforces maximum redirect count when obolus is enabled", async () => {
+    let callCount = 0;
+    const fetchImpl = vi.fn().mockImplementation(async (urlStr: string) => {
+      callCount++;
+      return mockFetchResponse({
+        status: 302,
+        headers: {
+          location: "https://bible.usccb.org/bible/readings/next.cfm",
+        },
+        url: urlStr,
+      });
+    });
+
+    const client = createFetchClient(fetchImpl, {
+      obolus: true,
+      maxRedirects: 2,
+    });
     await expect(
       client.get("https://bible.usccb.org/bible/readings/010125.cfm")
-    ).rejects.toThrow(/exceeded maximum allowed size/i);
+    ).rejects.toThrow(/Maximum redirect count exceeded/i);
+    expect(callCount).toBe(3); // Initial + 2 redirects
+  });
+
+  it("prevents cross-origin redirects from contacting target origin when obolus is enabled", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockImplementation(async (input: string | URL | Request) => {
+        const urlStr = typeof input === "string" ? input : input.toString();
+        if (urlStr.includes("bible.usccb.org")) {
+          return mockFetchResponse({
+            status: 302,
+            headers: {
+              location: "https://evil.example.com/steal-data",
+            },
+            url: urlStr,
+          });
+        }
+        return mockFetchResponse({ body: "should not be reached" });
+      });
+
+    const client = createFetchClient(fetchImpl, { obolus: true });
+    await expect(
+      client.get("https://bible.usccb.org/bible/readings/010125.cfm")
+    ).rejects.toThrow(
+      /Cross-origin redirect from https:\/\/bible\.usccb\.org to https:\/\/evil\.example\.com is not allowed/i
+    );
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("follows relative and same-origin redirects with obolus enabled", async () => {
+    let callCount = 0;
+    const fetchImpl = vi
+      .fn()
+      .mockImplementation(async (input: string | URL | Request) => {
+        callCount++;
+        const urlStr = typeof input === "string" ? input : input.toString();
+        if (callCount === 1) {
+          return mockFetchResponse({
+            status: 302,
+            headers: {
+              location: "/bible/readings/010225.cfm",
+            },
+            url: urlStr,
+          });
+        }
+        return mockFetchResponse({
+          status: 200,
+          body: "<html><body>Reading 2</body></html>",
+          url: urlStr,
+        });
+      });
+
+    const client = createFetchClient(fetchImpl, { obolus: true });
+    const response = await client.get(
+      "https://bible.usccb.org/bible/readings/010125.cfm"
+    );
+    expect(response.status).toBe(200);
+    expect(response.text).toBe("<html><body>Reading 2</body></html>");
+    expect(callCount).toBe(2);
+  });
+
+  it("exposes and forwards client.reset() when obolus is enabled", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockImplementation(async () => mockFetchResponse({}));
+    const client = createFetchClient(fetchImpl, { obolus: true });
+    expect(typeof client.reset).toBe("function");
+    expect(() => client.reset?.()).not.toThrow();
   });
 });

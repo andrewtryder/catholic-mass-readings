@@ -1,5 +1,6 @@
 import { USCCB_ORIGIN } from "./constants.js";
 import { isObolusChallenge, solveObolusChallenge } from "./obolus.js";
+import { readBoundedText } from "./http-body.js";
 
 const PROOF_COOKIE_NAME = "X_Obolus_Proof";
 const MAX_OBOLUS_ATTEMPTS = 2;
@@ -63,14 +64,27 @@ class ObolusStore {
   }
 }
 
-const activeStores = new Set<ObolusStore>();
+export interface WrapObolusOptions {
+  maxResponseSizeBytes?: number;
+}
+
+export type ObolusFetchLike = FetchLike & {
+  reset(origin?: string): void;
+  forceReset(origin?: string): void;
+};
+
+const activeStores = new Set<WeakRef<ObolusStore>>();
 
 /** Wrap a fetch implementation with USCCB-specific retry handling for live requests. */
-export function wrapFetchWithObolus(fetchImpl: FetchLike): FetchLike {
+export function wrapFetchWithObolus(
+  fetchImpl: FetchLike,
+  options: WrapObolusOptions = {}
+): ObolusFetchLike {
   const store = new ObolusStore();
-  activeStores.add(store);
+  activeStores.add(new WeakRef(store));
+  const maxBytes = options.maxResponseSizeBytes ?? 3 * 1024 * 1024;
 
-  return async (input, init) => {
+  const wrapped: FetchLike = async (input, init) => {
     let url: URL;
     try {
       url = getRequestUrl(input);
@@ -84,16 +98,40 @@ export function wrapFetchWithObolus(fetchImpl: FetchLike): FetchLike {
 
     const method = init?.method ?? "GET";
     if (method === "HEAD") {
-      return fetchHeadWithObolus(fetchImpl, input, init, store, url.origin);
+      return fetchHeadWithObolus(
+        fetchImpl,
+        input,
+        init,
+        store,
+        url.origin,
+        maxBytes
+      );
     }
-    return fetchGetWithObolus(fetchImpl, input, init, store, url.origin);
+    return fetchGetWithObolus(
+      fetchImpl,
+      input,
+      init,
+      store,
+      url.origin,
+      maxBytes
+    );
   };
+
+  return Object.assign(wrapped, {
+    reset: (origin?: string) => store.reset(origin),
+    forceReset: (origin?: string) => store.forceReset(origin),
+  });
 }
 
 /** Reset cached proof state (for tests and recovery retries). */
 export function resetObolusState(origin?: string): void {
-  for (const store of activeStores) {
-    store.forceReset(origin);
+  for (const ref of activeStores) {
+    const store = ref.deref();
+    if (store) {
+      store.forceReset(origin);
+    } else {
+      activeStores.delete(ref);
+    }
   }
 }
 
@@ -107,53 +145,13 @@ function getRequestUrl(input: string | URL | Request): URL {
   return new URL((input as { url: string }).url);
 }
 
-async function fetchWithRedirectHandling(
-  fetchImpl: FetchLike,
-  input: string | URL | Request,
-  init: RequestInit | undefined,
-  store: ObolusStore,
-  currentOrigin: string,
-  method: string
-): Promise<FetchResult> {
-  const response = await fetchImpl(input, init);
-  const status = response.status;
-  if (status >= 300 && status < 400 && response.headers) {
-    const location = response.headers.get("location");
-    if (location) {
-      const currentUrl = getRequestUrl(input);
-      const targetUrl = new URL(location, currentUrl);
-      if (targetUrl.origin !== currentOrigin) {
-        const cleanInit = stripObolusCookie(init);
-        return fetchImpl(targetUrl, cleanInit);
-      } else {
-        if (method === "HEAD") {
-          return fetchHeadWithObolus(
-            fetchImpl,
-            targetUrl,
-            init,
-            store,
-            currentOrigin
-          );
-        }
-        return fetchGetWithObolus(
-          fetchImpl,
-          targetUrl,
-          init,
-          store,
-          currentOrigin
-        );
-      }
-    }
-  }
-  return response;
-}
-
 async function fetchGetWithObolus(
   fetchImpl: FetchLike,
   input: string | URL | Request,
   init: RequestInit | undefined,
   store: ObolusStore,
-  origin: string
+  origin: string,
+  maxBytes: number
 ): Promise<FetchResult> {
   let fallback: { response: FetchResult; text: string } | null = null;
 
@@ -166,15 +164,11 @@ async function fetchGetWithObolus(
     }
 
     const proofCookie = store.getCookie(origin);
-    const response = await fetchWithRedirectHandling(
-      fetchImpl,
-      input,
-      withCookie(init, proofCookie),
-      store,
-      origin,
-      "GET"
-    );
-    const text = await response.text();
+    const response = await fetchImpl(input, withCookie(init, proofCookie));
+    if (response.status >= 300 && response.status < 400) {
+      return response;
+    }
+    const text = await readBoundedText(response, maxBytes);
 
     if (!isObolusChallenge(text)) {
       return createTextResponse(response, text);
@@ -186,15 +180,11 @@ async function fetchGetWithObolus(
       init.signal.throwIfAborted();
     }
     const retryProofCookie = store.getCookie(origin);
-    const retry = await fetchWithRedirectHandling(
-      fetchImpl,
-      input,
-      withCookie(init, retryProofCookie),
-      store,
-      origin,
-      "GET"
-    );
-    const retryText = await retry.text();
+    const retry = await fetchImpl(input, withCookie(init, retryProofCookie));
+    if (retry.status >= 300 && retry.status < 400) {
+      return retry;
+    }
+    const retryText = await readBoundedText(retry, maxBytes);
 
     if (!isObolusChallenge(retryText)) {
       return createTextResponse(retry, retryText);
@@ -211,7 +201,8 @@ async function fetchHeadWithObolus(
   input: string | URL | Request,
   init: RequestInit | undefined,
   store: ObolusStore,
-  origin: string
+  origin: string,
+  maxBytes: number
 ): Promise<FetchResult> {
   const urlStr = typeof input === "string" ? input : input.toString();
   let lastResponse: FetchResult | null = null;
@@ -225,27 +216,22 @@ async function fetchHeadWithObolus(
     }
 
     const proofCookie = store.getCookie(origin);
-    const response = await fetchWithRedirectHandling(
-      fetchImpl,
-      input,
-      withCookie(init, proofCookie),
-      store,
-      origin,
-      "HEAD"
-    );
+    const response = await fetchImpl(input, withCookie(init, proofCookie));
+    if (response.status >= 300 && response.status < 400) {
+      return response;
+    }
     if (response.ok || response.status !== 403) {
       return response;
     }
 
-    const challengeResponse = await fetchWithRedirectHandling(
-      fetchImpl,
+    const challengeResponse = await fetchImpl(
       urlStr,
-      withCookie({ method: "GET", signal: init?.signal }, proofCookie),
-      store,
-      origin,
-      "GET"
+      withCookie({ method: "GET", signal: init?.signal }, proofCookie)
     );
-    const challengeBody = await challengeResponse.text();
+    if (challengeResponse.status >= 300 && challengeResponse.status < 400) {
+      return challengeResponse;
+    }
+    const challengeBody = await readBoundedText(challengeResponse, maxBytes);
     if (!isObolusChallenge(challengeBody)) {
       return response;
     }
@@ -256,14 +242,10 @@ async function fetchHeadWithObolus(
       init.signal.throwIfAborted();
     }
     const retryProofCookie = store.getCookie(origin);
-    const retry = await fetchWithRedirectHandling(
-      fetchImpl,
-      input,
-      withCookie(init, retryProofCookie),
-      store,
-      origin,
-      "HEAD"
-    );
+    const retry = await fetchImpl(input, withCookie(init, retryProofCookie));
+    if (retry.status >= 300 && retry.status < 400) {
+      return retry;
+    }
     if (retry.ok) {
       return retry;
     }
@@ -271,15 +253,14 @@ async function fetchHeadWithObolus(
       return retry;
     }
 
-    const verifyResponse = await fetchWithRedirectHandling(
-      fetchImpl,
+    const verifyResponse = await fetchImpl(
       urlStr,
-      withCookie({ method: "GET", signal: init?.signal }, retryProofCookie),
-      store,
-      origin,
-      "GET"
+      withCookie({ method: "GET", signal: init?.signal }, retryProofCookie)
     );
-    const verifyBody = await verifyResponse.text();
+    if (verifyResponse.status >= 300 && verifyResponse.status < 400) {
+      return verifyResponse;
+    }
+    const verifyBody = await readBoundedText(verifyResponse, maxBytes);
     if (!isObolusChallenge(verifyBody)) {
       return retry;
     }
@@ -343,25 +324,4 @@ function withCookie(
   const proof = `${PROOF_COOKIE_NAME}=${cookie}`;
   headers.set("Cookie", existing ? `${existing}; ${proof}` : proof);
   return { ...init, headers, redirect: init?.redirect ?? "manual" };
-}
-
-function stripObolusCookie(init: RequestInit | undefined): RequestInit {
-  if (!init?.headers) {
-    return init ?? {};
-  }
-  const headers = new Headers(init.headers);
-  const existing = headers.get("Cookie");
-  if (existing) {
-    const cleaned = existing
-      .split(";")
-      .map((part) => part.trim())
-      .filter((part) => !part.startsWith(`${PROOF_COOKIE_NAME}=`))
-      .join("; ");
-    if (cleaned) {
-      headers.set("Cookie", cleaned);
-    } else {
-      headers.delete("Cookie");
-    }
-  }
-  return { ...init, headers };
 }

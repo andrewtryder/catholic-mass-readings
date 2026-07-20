@@ -34,6 +34,46 @@ function citationsOnlyOption(): Option {
   );
 }
 
+function concurrencyOption(): Option {
+  return new Option(
+    "--concurrency <count>",
+    "Maximum number of concurrent requests"
+  ).default("3");
+}
+
+function parseConcurrencyOption(value: string): number {
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < 1 || n > 20) {
+    throw new USCCBArgumentError(
+      `concurrency must be an integer between 1 and 20; received '${value}'`
+    );
+  }
+  return n;
+}
+
+export async function mapWithConcurrency<T, R>(
+  items: readonly T[],
+  concurrency: number,
+  operation: (item: T) => Promise<R>
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+
+  async function worker(): Promise<void> {
+    while (true) {
+      const index = nextIndex++;
+      if (index >= items.length) return;
+      results[index] = await operation(items[index]);
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, items.length) }, () => worker())
+  );
+
+  return results;
+}
+
 function formatIsoDate(date: Date): string {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");
@@ -177,6 +217,7 @@ program
   .option("-e, --end <date>", `End date (${DATE_FMT})`, weekLaterStr)
   .addOption(massTypeOption())
   .addOption(citationsOnlyOption())
+  .addOption(concurrencyOption())
   .option("--step <days>", "Number of days to step", "7")
   .option("--save <file>", "Save JSON output to file")
   .action(
@@ -185,6 +226,7 @@ program
       end: string;
       type?: string[];
       citationsOnly?: boolean;
+      concurrency: string;
       step: string;
       save?: string;
     }) => {
@@ -192,8 +234,9 @@ program
       const end = parseDateOption(options.end);
       const types = parseMassTypes(options.type);
       const format = options.citationsOnly ? "citations" : "full";
+      const concurrency = parseConcurrencyOption(options.concurrency);
       const dates = USCCB.getMassDates(start, end, Number(options.step));
-      await printMassRange(dates, types, options.save, format);
+      await printMassRange(dates, types, options.save, format, concurrency);
     }
   );
 
@@ -204,6 +247,7 @@ program
   .option("-e, --end <date>", `End date (${DATE_FMT})`, weekLaterStr)
   .addOption(massTypeOption())
   .addOption(citationsOnlyOption())
+  .addOption(concurrencyOption())
   .option("--save <file>", "Save JSON output to file")
   .action(
     async (options: {
@@ -211,14 +255,16 @@ program
       end: string;
       type?: string[];
       citationsOnly?: boolean;
+      concurrency: string;
       save?: string;
     }) => {
       const start = parseDateOption(options.start);
       const end = parseDateOption(options.end);
       const types = parseMassTypes(options.type);
       const format = options.citationsOnly ? "citations" : "full";
+      const concurrency = parseConcurrencyOption(options.concurrency);
       const dates = USCCB.getSundayMassDates(start, end);
-      await printMassRange(dates, types, options.save, format);
+      await printMassRange(dates, types, options.save, format, concurrency);
     }
   );
 
@@ -226,11 +272,12 @@ async function printMassRange(
   dates: Date[],
   types: MassType[] | undefined,
   save?: string,
-  format: OutputFormat = "full"
+  format: OutputFormat = "full",
+  concurrency = 3
 ): Promise<void> {
   const usccb = new USCCB(await createNodeHttpClient());
-  const responses = await Promise.all(
-    dates.map((date) => usccb.getMassFromDate(date, types))
+  const responses = await mapWithConcurrency(dates, concurrency, (date) =>
+    usccb.getMassFromDate(date, types)
   );
   const masses = responses
     .filter((mass): mass is NonNullable<typeof mass> => mass !== null)

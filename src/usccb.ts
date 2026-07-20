@@ -186,7 +186,11 @@ export class USCCB {
     }
     for (let recovery = 0; recovery < MAX_RETRIES; recovery++) {
       if (recovery > 0) {
-        resetObolusState();
+        if (typeof this.client.reset === "function") {
+          this.client.reset();
+        } else {
+          resetObolusState();
+        }
       }
 
       for (const type of types) {

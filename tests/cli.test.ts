@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
+import { mapWithConcurrency } from "../src/cli.js";
 
 const execFileAsync = promisify(execFile);
 const testDir = dirname(fileURLToPath(import.meta.url));
@@ -244,5 +245,46 @@ describe("CLI process tests", () => {
       // Cleanup
       await rm(tmpSavePath, { force: true });
     });
+
+    it("rejects invalid --concurrency on get-mass-range", async () => {
+      const res0 = await runCli(["get-mass-range", "--concurrency", "0"]);
+      expect(res0.exitCode).toBe(1);
+      expect(res0.stderr).toContain(
+        "concurrency must be an integer between 1 and 20"
+      );
+
+      const res25 = await runCli(["get-mass-range", "--concurrency", "25"]);
+      expect(res25.exitCode).toBe(1);
+      expect(res25.stderr).toContain(
+        "concurrency must be an integer between 1 and 20"
+      );
+
+      const resAbc = await runCli(["get-mass-range", "--concurrency", "abc"]);
+      expect(resAbc.exitCode).toBe(1);
+      expect(resAbc.stderr).toContain(
+        "concurrency must be an integer between 1 and 20"
+      );
+    });
+  });
+});
+
+describe("mapWithConcurrency", () => {
+  it("limits concurrent worker execution and maintains result order", async () => {
+    let active = 0;
+    let maxActive = 0;
+    const items = [1, 2, 3, 4, 5, 6];
+
+    const results = await mapWithConcurrency(items, 2, async (item) => {
+      active++;
+      if (active > maxActive) {
+        maxActive = active;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      active--;
+      return item * 10;
+    });
+
+    expect(maxActive).toBeLessThanOrEqual(2);
+    expect(results).toEqual([10, 20, 30, 40, 50, 60]);
   });
 });

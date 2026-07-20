@@ -8,6 +8,8 @@ import {
   formatReadingCitations,
   massToDict,
   massToString,
+  verseToDict,
+  Verse,
 } from "../src/models.js";
 import { USCCB } from "../src/usccb.js";
 import { parseIsoDate } from "../src/utils.js";
@@ -77,5 +79,49 @@ describe("citations output format", () => {
     expect(
       formatReadingCitations(gospelSection!.readings[1], gospelSection!)
     ).toContain("Luke 12:35-40");
+  });
+});
+
+describe("verseToDict", () => {
+  it("converts a standard verse with a book to a dictionary", () => {
+    const verse: Verse = {
+      text: "John 3:16",
+      link: "https://bible.usccb.org/bible/john/3?16",
+      book: "John",
+    };
+    const dict = verseToDict(verse);
+    expect(dict).toEqual({
+      text: "John 3:16",
+      link: "https://bible.usccb.org/bible/john/3?16",
+      book: "John",
+    });
+  });
+
+  it("handles a verse where book is null", () => {
+    const verse: Verse = {
+      text: "Some verse text",
+      link: "https://example.com",
+      book: null,
+    };
+    const dict = verseToDict(verse);
+    expect(dict).toEqual({
+      text: "Some verse text",
+      link: "https://example.com",
+      book: null,
+    });
+  });
+
+  it("handles empty strings for text and link", () => {
+    const verse: Verse = {
+      text: "",
+      link: "",
+      book: "Genesis",
+    };
+    const dict = verseToDict(verse);
+    expect(dict).toEqual({
+      text: "",
+      link: "",
+      book: "Genesis",
+    });
   });
 });

@@ -13,6 +13,7 @@ import {
 
 const MAX_RETRIES = 2;
 import { resetObolusState } from "./http-obolus.js";
+import { isObolusChallenge } from "./obolus.js";
 import {
   MassType,
   SectionType,
@@ -325,6 +326,12 @@ export class USCCB {
     date: Date | null,
     type: MassType | string | null
   ): Mass {
+    if (isObolusChallenge(html) || html.includes("Access Denied")) {
+      throw new USCCBParseError(
+        "USCCB returned a block or challenge page instead of readings content"
+      );
+    }
+
     const $ = cheerio.load(html);
     const title = $("title").text().trim().split("|")[0].trim();
     if (!title) {

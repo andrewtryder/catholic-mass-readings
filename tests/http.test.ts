@@ -149,4 +149,47 @@ describe("createFetchClient resource limits and security", () => {
       })
     ).rejects.toThrow();
   });
+
+  it("aborts request when timeoutMs is exceeded", async () => {
+    const fetchImpl = vi.fn().mockImplementation(async (_url, init) => {
+      return new Promise((_, reject) => {
+        init?.signal?.addEventListener("abort", () => {
+          reject(init.signal.reason ?? new Error("Timeout"));
+        });
+      });
+    });
+
+    const client = createFetchClient(fetchImpl, {
+      obolus: false,
+      timeoutMs: 1,
+    });
+
+    await expect(
+      client.get("https://bible.usccb.org/bible/readings/010125.cfm")
+    ).rejects.toThrow();
+  });
+
+  it("enforces response size limit for non-streaming response bodies", async () => {
+    const largeBody = "b".repeat(200);
+    const fetchImpl = vi.fn().mockImplementation(async () => ({
+      ok: true,
+      status: 200,
+      url: "https://bible.usccb.org/bible/readings/010125.cfm",
+      headers: new Headers({ "content-type": "text/html" }),
+      text: async () => largeBody,
+      body: null,
+    }));
+
+    const client = createFetchClient(fetchImpl, {
+      obolus: false,
+      maxResponseSizeBytes: 100,
+    });
+
+    await expect(
+      client.get("https://bible.usccb.org/bible/readings/010125.cfm")
+    ).rejects.toThrow(USCCBNetworkError);
+    await expect(
+      client.get("https://bible.usccb.org/bible/readings/010125.cfm")
+    ).rejects.toThrow(/exceeded maximum allowed size/i);
+  });
 });

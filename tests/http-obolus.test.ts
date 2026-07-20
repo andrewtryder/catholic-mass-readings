@@ -186,4 +186,34 @@ describe("wrapFetchWithObolus", () => {
         : false
     ).toBe(false);
   });
+
+  it("prevents two concurrent requests from overwriting or resetting each other's active solver state", async () => {
+    let challengeResponses = 0;
+    const fetchImpl = vi
+      .fn()
+      .mockImplementation(
+        async (_input: string | URL | Request, init?: RequestInit) => {
+          const cookieHeader = init?.headers
+            ? new Headers(init.headers).get("Cookie")
+            : null;
+          if (cookieHeader?.includes("X_Obolus_Proof")) {
+            return mockResponse(200, successHtml);
+          }
+          challengeResponses++;
+          return mockResponse(403, challengeHtml);
+        }
+      );
+
+    const wrapped = wrapFetchWithObolus(fetchImpl);
+    const [res1, res2] = await Promise.all([
+      wrapped("https://bible.usccb.org/bible/readings/080625.cfm"),
+      wrapped("https://bible.usccb.org/bible/readings/080625.cfm"),
+    ]);
+
+    expect(res1.ok).toBe(true);
+    expect(res2.ok).toBe(true);
+    expect(await res1.text()).toContain("Feast of the Transfiguration");
+    expect(await res2.text()).toContain("Feast of the Transfiguration");
+    expect(challengeResponses).toBe(2);
+  });
 });

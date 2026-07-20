@@ -1,4 +1,4 @@
-name: Lint PR Title
+name: Conventional PR Title Check
 
 # With squash-and-merge, only the PR title becomes the commit on main.
 on:
@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   main:
-    name: Validate PR title
+    name: Validate PR Title Matches Conventional Commits
     runs-on: ubuntu-latest
     steps:
       - uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6.1.1

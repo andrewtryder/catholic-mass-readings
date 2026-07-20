@@ -1,4 +1,4 @@
-name: CI
+name: CI & Code Quality
 
 on:
   push:
@@ -12,6 +12,7 @@ permissions:
 
 jobs:
   lint-and-format:
+    name: Code Quality (Format, Lint, Typecheck & Coverage)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -33,6 +34,7 @@ jobs:
         run: npm run test:coverage
 
   test:
+    name: Unit Tests (Node ${{ matrix.node-version }})
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -51,6 +53,7 @@ jobs:
         run: npm test
 
   build:
+    name: Build Production Bundles (JS & CLI)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -66,6 +69,7 @@ jobs:
         run: npm run build
 
   smoke-test:
+    name: Package Verification & Import Smoke Tests
     runs-on: ubuntu-latest
     needs: build
     steps:
@@ -83,7 +87,10 @@ jobs:
       - name: Validate package manifest (dry run)
         run: npm pack --dry-run
       - name: Pack tarball
-        run: echo "TARBALL=$(npm pack --quiet)" >> "$GITHUB_ENV"
+        run: |
+          npm pack --quiet
+          TARBALL=$(ls -1 catholic-mass-readings-*.tgz | head -n 1)
+          echo "TARBALL=$TARBALL" >> "$GITHUB_ENV"
       - name: Smoke test — tarball install, ESM import, type import, CLI --help
         run: |
           TMPDIR=$(mktemp -d)

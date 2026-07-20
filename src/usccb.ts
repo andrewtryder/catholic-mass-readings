@@ -2,9 +2,9 @@ import * as cheerio from "cheerio";
 import type { Element } from "domhandler";
 
 import { OR_PATTERN, SUNDAY_DAY_OF_WEEK } from "./constants.js";
-import type { HttpClient } from "./http.js";
+import type { HttpClient, HttpRequestOptions, HttpResponse } from "./http.js";
 import { createFetchClient } from "./http.js";
-import { USCCBArgumentError, USCCBNetworkError } from "./errors.js";
+import { USCCBArgumentError, USCCBError, USCCBNetworkError } from "./errors.js";
 
 const MAX_RETRIES = 2;
 import { resetObolusState } from "./http-obolus.js";
@@ -134,19 +134,34 @@ export class USCCB {
   }
 
   /** Fetch today's mass, optionally for a specific {@link MassType}. */
-  async getTodayMass(type?: MassType): Promise<Mass | null> {
+  async getTodayMass(
+    typeOrOptions?: MassType | (HttpRequestOptions & { type?: MassType }),
+    options?: HttpRequestOptions
+  ): Promise<Mass | null> {
     const today = USCCB.today();
-    if (type !== undefined) {
-      return this.getMass(today, type);
+    let type: MassType | undefined;
+    let opts: HttpRequestOptions | undefined = options;
+    if (typeof typeOrOptions === "string") {
+      type = typeOrOptions as MassType;
+    } else if (typeOrOptions && typeof typeOrOptions === "object") {
+      type = typeOrOptions.type;
+      opts = { ...typeOrOptions, ...options };
     }
-    return this.getMassFromDate(today);
+    if (type !== undefined) {
+      return this.getMass(today, type, opts);
+    }
+    return this.getMassFromDate(today, undefined, opts);
   }
 
   /** Fetch mass for a date and explicit mass type. */
-  async getMass(date: Date, type: MassType): Promise<Mass | null> {
+  async getMass(
+    date: Date,
+    type: MassType,
+    options?: HttpRequestOptions
+  ): Promise<Mass | null> {
     assertValidDate(date, "date");
     const url = massTypeToUrl(type, date);
-    return this.fetchMass(url, date, type);
+    return this.fetchMass(url, date, type, options);
   }
 
   /**
@@ -155,19 +170,36 @@ export class USCCB {
    */
   async getMassFromDate(
     date: Date,
-    types: MassType[] = DEFAULT_MASS_TYPES
+    typesOrOptions:
+      | MassType[]
+      | (HttpRequestOptions & { types?: MassType[] }) = DEFAULT_MASS_TYPES,
+    options?: HttpRequestOptions
   ): Promise<Mass | null> {
     assertValidDate(date, "date");
+    let types: MassType[] = DEFAULT_MASS_TYPES;
+    let opts: HttpRequestOptions | undefined = options;
+    if (Array.isArray(typesOrOptions)) {
+      types = typesOrOptions;
+    } else if (typesOrOptions && typeof typesOrOptions === "object") {
+      if (typesOrOptions.types) types = typesOrOptions.types;
+      opts = { ...typesOrOptions, ...options };
+    }
     for (let recovery = 0; recovery < MAX_RETRIES; recovery++) {
       if (recovery > 0) {
         resetObolusState();
       }
 
       for (const type of types) {
+        if (opts?.signal?.aborted) {
+          opts.signal.throwIfAborted();
+        }
         const url = massTypeToUrl(type, date);
         try {
-          return await this.fetchMass(url, date, type);
-        } catch {
+          return await this.fetchMass(url, date, type, opts);
+        } catch (err) {
+          if (opts?.signal?.aborted) {
+            throw err;
+          }
           continue;
         }
       }
@@ -176,16 +208,22 @@ export class USCCB {
   }
 
   /** Fetch and parse mass from a USCCB readings URL (`https://bible.usccb.org/bible/readings/`). */
-  async getMassFromUrl(url: string): Promise<Mass | null> {
+  async getMassFromUrl(
+    url: string,
+    options?: HttpRequestOptions
+  ): Promise<Mass | null> {
     assertUsccbReadingsUrl(url);
-    return this.getMassFromTrustedUrl(url);
+    return this.getMassFromTrustedUrl(url, options);
   }
 
   /**
    * Fetch and parse mass from any trusted URL without USCCB origin and path enforcement.
    * Requires explicit opt-in when fetching from sources outside `https://bible.usccb.org`.
    */
-  async getMassFromTrustedUrl(url: string): Promise<Mass | null> {
+  async getMassFromTrustedUrl(
+    url: string,
+    options?: HttpRequestOptions
+  ): Promise<Mass | null> {
     let validUrl: URL;
     try {
       validUrl = new URL(url);
@@ -206,18 +244,33 @@ export class USCCB {
         type = parsed[1];
       }
     }
-    return this.fetchMass(url, date, type);
+    return this.fetchMass(url, date, type, options);
   }
 
   /** List mass types available for a date (via HEAD requests). */
-  async getMassTypes(date: Date): Promise<MassType[]> {
+  async getMassTypes(
+    date: Date,
+    options?: HttpRequestOptions
+  ): Promise<MassType[]> {
     assertValidDate(date, "date");
     const urlsToType = new Map(
       Object.values(MassType).map((type) => [massTypeToUrl(type, date), type])
     );
-    const responses = await Promise.all(
-      [...urlsToType.keys()].map((url) => this.client.head(url))
-    );
+    let responses: HttpResponse[];
+    try {
+      responses = await Promise.all(
+        [...urlsToType.keys()].map((url) => this.client.head(url, options))
+      );
+    } catch (error) {
+      if (error instanceof USCCBError) {
+        throw error;
+      }
+      const message = error instanceof Error ? error.message : String(error);
+      throw new USCCBNetworkError(
+        `Failed to probe mass types: ${message}`,
+        error
+      );
+    }
     const found = responses
       .filter((response) => response.ok)
       .map((response) => urlsToType.get(response.url)!)
@@ -228,9 +281,22 @@ export class USCCB {
   private async fetchMass(
     url: string,
     date: Date | null,
-    type: MassType | string | null
+    type: MassType | string | null,
+    options?: HttpRequestOptions
   ): Promise<Mass | null> {
-    const response = await this.client.get(url);
+    let response: HttpResponse;
+    try {
+      response = await this.client.get(url, options);
+    } catch (error) {
+      if (error instanceof USCCBError) {
+        throw error;
+      }
+      const message = error instanceof Error ? error.message : String(error);
+      throw new USCCBNetworkError(
+        `Failed to fetch mass from ${url}: ${message}`,
+        error
+      );
+    }
     if (!response.ok) {
       throw new USCCBNetworkError(
         `Failed to fetch mass from ${url}: ${response.status}`

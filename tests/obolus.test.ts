@@ -72,4 +72,81 @@ describe("Obolus challenge", () => {
     );
     expect(cookie).toBe(`123:testnonce:token:10:${result.miningNonce}`);
   });
+
+  it("enforces parameter bounds on challenge configuration", () => {
+    const hugeNonceHtml = `
+      <script>
+        var config = {
+          nonce: '${"a".repeat(150)}',
+          challengeToken: 'token',
+          challengeTimestamp: '123',
+          difficulty: '10'
+        };
+      </script>
+    `;
+    expect(() => parseObolusConfig(hugeNonceHtml)).toThrow(
+      "exceed maximum allowed length"
+    );
+
+    const outOfBoundsTimingHtml = `
+      <script>
+        var config = {
+          nonce: 'test',
+          challengeToken: 'token',
+          challengeTimestamp: '123',
+          difficulty: '10',
+          maxTime: '-10'
+        };
+      </script>
+    `;
+    expect(() => parseObolusConfig(outOfBoundsTimingHtml)).toThrow(
+      "Invalid maxTime in challenge"
+    );
+  });
+
+  it("clamps difficulty to supported range [1, 20]", () => {
+    const lowDiffHtml = `
+      <script>
+        var config = {
+          nonce: 'test',
+          challengeToken: 'token',
+          challengeTimestamp: '123',
+          difficulty: '-50'
+        };
+      </script>
+    `;
+    expect(parseObolusConfig(lowDiffHtml).difficulty).toBe(1);
+
+    const highDiffHtml = `
+      <script>
+        var config = {
+          nonce: 'test',
+          challengeToken: 'token',
+          challengeTimestamp: '123',
+          difficulty: '100'
+        };
+      </script>
+    `;
+    expect(parseObolusConfig(highDiffHtml).difficulty).toBe(20);
+  });
+
+  it("supports cancellation of proof loop via AbortSignal", async () => {
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(
+      computeObolusProof(
+        {
+          nonce: "testnonce",
+          challengeToken: "token",
+          challengeTimestamp: "123",
+          difficulty: 18,
+          benchmarkElapsed: 10,
+          maxTime: 4000,
+          mode: "default",
+        },
+        { signal: controller.signal }
+      )
+    ).rejects.toThrow(/aborted/);
+  });
 });

@@ -4,16 +4,15 @@ import { isObolusChallenge, solveObolusChallenge } from "./obolus.js";
 const PROOF_COOKIE_NAME = "X_Obolus_Proof";
 const MAX_OBOLUS_ATTEMPTS = 2;
 
-type FetchLike = (
+export type FetchResult = Pick<Response, "text" | "ok" | "status" | "url"> & {
+  headers?: Headers;
+  body?: unknown;
+};
+
+export type FetchLike = (
   input: string | URL | Request,
   init?: RequestInit
-) => Promise<
-  Pick<Response, "text" | "ok" | "status" | "url"> & { headers?: Headers }
->;
-
-type FetchResult = Pick<Response, "text" | "ok" | "status" | "url"> & {
-  headers?: Headers;
-};
+) => Promise<FetchResult>;
 
 class ObolusStore {
   private cookies = new Map<string, string>();
@@ -145,6 +144,9 @@ async function fetchGetWithObolus(
   let fallback: { response: FetchResult; text: string } | null = null;
 
   for (let attempt = 0; attempt < MAX_OBOLUS_ATTEMPTS; attempt++) {
+    if (init?.signal?.aborted) {
+      init.signal.throwIfAborted();
+    }
     if (attempt > 0) {
       store.reset(origin);
     }
@@ -164,8 +166,11 @@ async function fetchGetWithObolus(
       return createTextResponse(response, text);
     }
 
-    await solveChallengeAndCache(text, store, origin);
+    await solveChallengeAndCache(text, store, origin, init?.signal);
 
+    if (init?.signal?.aborted) {
+      init.signal.throwIfAborted();
+    }
     const retryProofCookie = store.getCookie(origin);
     const retry = await fetchWithRedirectHandling(
       fetchImpl,
@@ -198,6 +203,9 @@ async function fetchHeadWithObolus(
   let lastResponse: FetchResult | null = null;
 
   for (let attempt = 0; attempt < MAX_OBOLUS_ATTEMPTS; attempt++) {
+    if (init?.signal?.aborted) {
+      init.signal.throwIfAborted();
+    }
     if (attempt > 0) {
       store.reset(origin);
     }
@@ -218,7 +226,7 @@ async function fetchHeadWithObolus(
     const challengeResponse = await fetchWithRedirectHandling(
       fetchImpl,
       urlStr,
-      withCookie({ method: "GET" }, proofCookie),
+      withCookie({ method: "GET", signal: init?.signal }, proofCookie),
       store,
       origin,
       "GET"
@@ -228,8 +236,11 @@ async function fetchHeadWithObolus(
       return response;
     }
 
-    await solveChallengeAndCache(challengeBody, store, origin);
+    await solveChallengeAndCache(challengeBody, store, origin, init?.signal);
 
+    if (init?.signal?.aborted) {
+      init.signal.throwIfAborted();
+    }
     const retryProofCookie = store.getCookie(origin);
     const retry = await fetchWithRedirectHandling(
       fetchImpl,
@@ -249,7 +260,7 @@ async function fetchHeadWithObolus(
     const verifyResponse = await fetchWithRedirectHandling(
       fetchImpl,
       urlStr,
-      withCookie({ method: "GET" }, retryProofCookie),
+      withCookie({ method: "GET", signal: init?.signal }, retryProofCookie),
       store,
       origin,
       "GET"
@@ -268,16 +279,20 @@ async function fetchHeadWithObolus(
 async function solveChallengeAndCache(
   challengeHtml: string,
   store: ObolusStore,
-  origin: string
+  origin: string,
+  signal?: AbortSignal | null
 ): Promise<void> {
   if (store.getCookie(origin)) {
     return;
+  }
+  if (signal?.aborted) {
+    signal.throwIfAborted();
   }
 
   let inFlight = store.getSolver(origin);
   if (!inFlight) {
     inFlight = (async () => {
-      const cookie = await solveObolusChallenge(challengeHtml);
+      const cookie = await solveObolusChallenge(challengeHtml, { signal });
       store.setCookie(origin, cookie);
     })().finally(() => {
       store.clearSolver(origin);

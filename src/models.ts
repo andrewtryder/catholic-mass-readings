@@ -127,15 +127,14 @@ export interface Reading {
 }
 
 export function readingHeader(reading: Reading): string {
-  const book = reading.verses.find((v) => v.book)?.book ?? null;
-  if (!book) {
-    return String(reading);
-  }
-  return (
-    book +
-    " " +
-    reading.verses.map((v) => stripBookAbbreviationsFromText(v.text)).join(", ")
-  );
+  const citations = reading.verses.map((verse) => verse.text).filter(Boolean);
+  const book = reading.verses.find((verse) => verse.book)?.book;
+
+  if (!book) return citations.join(", ") || "(citation unavailable)";
+
+  return `${book} ${reading.verses
+    .map((verse) => stripBookAbbreviationsFromText(verse.text))
+    .join(", ")}`;
 }
 
 export function readingTitle(reading: Reading): string | null {
@@ -154,7 +153,9 @@ export function formatReading(reading: Reading, parent: Section): string {
     parent.type === SectionType.READING ||
     parent.type === SectionType.GOSPEL
   ) {
-    return `${sectionDisplayHeader(parent)}: ${readingHeader(reading)}\n${readingTitle(reading)}\n\n${reading.text}\n${sectionFooter(parent)}`;
+    const title = readingTitle(reading);
+    const titleSection = title ? `\n${title}` : "";
+    return `${sectionDisplayHeader(parent)}: ${readingHeader(reading)}${titleSection}\n\n${reading.text}\n${sectionFooter(parent)}`;
   }
   return `${sectionDisplayHeader(parent)}: ${readingHeader(reading)}\n\n${reading.text}`;
 }

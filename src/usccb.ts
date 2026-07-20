@@ -1,7 +1,7 @@
 import * as cheerio from "cheerio";
 import type { Element } from "domhandler";
 
-import { OR_PATTERN, SUNDAY_DAY_OF_WEEK } from "./constants.js";
+import { OR_PATTERN } from "./constants.js";
 import type { HttpClient, HttpRequestOptions, HttpResponse } from "./http.js";
 import { createFetchClient } from "./http.js";
 import {
@@ -90,19 +90,13 @@ export class USCCB {
       }
     }
 
-    let adjustedStart = start;
-    let adjustedEnd = end;
+    const firstSunday = addDays(start, (7 - start.getDay()) % 7);
 
-    if (start.getDay() !== SUNDAY_DAY_OF_WEEK) {
-      const daysUntilSunday = (7 - start.getDay()) % 7;
-      const newStart = addDays(start, daysUntilSunday);
-      if (adjustedEnd !== undefined && adjustedEnd < newStart) {
-        adjustedEnd = addDays(adjustedEnd, daysUntilSunday);
-      }
-      adjustedStart = newStart;
+    if (end !== undefined && firstSunday >= end) {
+      return [];
     }
 
-    return USCCB.getMassDates(adjustedStart, adjustedEnd, 7);
+    return USCCB.getMassDates(firstSunday, end, 7);
   }
 
   /** Generate dates stepping by `stepDays` from `start` until `end` (capped at {@link maxQueryDate}). */
@@ -258,29 +252,40 @@ export class USCCB {
     options?: HttpRequestOptions
   ): Promise<MassType[]> {
     assertValidDate(date, "date");
-    const urlsToType = new Map(
-      Object.values(MassType).map((type) => [massTypeToUrl(type, date), type])
+    const checks = await Promise.allSettled(
+      Object.values(MassType).map(async (type) => ({
+        type,
+        response: await this.client.head(massTypeToUrl(type, date), options),
+      }))
     );
-    let responses: HttpResponse[];
-    try {
-      responses = await Promise.all(
-        [...urlsToType.keys()].map((url) => this.client.head(url, options))
-      );
-    } catch (error) {
-      if (error instanceof USCCBError) {
-        throw error;
+
+    if (
+      checks.length > 0 &&
+      checks.every((item) => item.status === "rejected")
+    ) {
+      const firstError = (checks[0] as PromiseRejectedResult).reason;
+      if (firstError instanceof USCCBError) {
+        throw firstError;
       }
-      const message = error instanceof Error ? error.message : String(error);
+      const message =
+        firstError instanceof Error ? firstError.message : String(firstError);
       throw new USCCBNetworkError(
         `Failed to probe mass types: ${message}`,
-        error
+        firstError
       );
     }
-    const found = responses
-      .filter((response) => response.ok)
-      .map((response) => urlsToType.get(response.url)!)
-      .filter((type): type is MassType => type !== undefined);
-    return found.sort((a, b) => a.localeCompare(b));
+
+    return checks
+      .filter(
+        (
+          item
+        ): item is PromiseFulfilledResult<{
+          type: MassType;
+          response: HttpResponse;
+        }> => item.status === "fulfilled" && item.value.response.ok
+      )
+      .map((item) => item.value.type)
+      .sort((a, b) => a.localeCompare(b));
   }
 
   private async fetchMass(
@@ -444,7 +449,7 @@ export class USCCB {
       contentBody,
       verses
     )) {
-      const text = cleanText(lines.join("")).trim();
+      const text = cleanText(lines.join("\n")).trim();
       if (text) {
         yield { verses: currentVerses, text };
         empty = false;
@@ -507,7 +512,10 @@ export function cleanText(input: string): string {
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'");
 
-  text = text.replace(/\s+/g, " ");
+  text = text
+    .replace(/\r\n?/g, "\n")
+    .replace(/[^\S\n]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n");
   text = text.replace(/\.([A-Z])/g, ". $1");
   text = text.replace(/,([A-Z])/g, ", $1");
   text = text.replace(/;([A-Z])/g, "; $1");

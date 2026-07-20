@@ -10,7 +10,7 @@ This document covers one-time setup for automated npm releases via OIDC trusted 
 
 ## 1. Bootstrap the package name (one-time)
 
-Trusted Publisher configuration requires an **existing** package on npmjs.com. Before the first automated release:
+Before the first automated release:
 
 ```bash
 npm login
@@ -18,8 +18,6 @@ npm run build
 # Provenance requires GitHub Actions OIDC; disable for local bootstrap only
 npm publish --provenance=false
 ```
-
-Alternatively, use a temporary `NPM_TOKEN` secret for the first `publish.yml` run, then remove it after configuring trusted publishing.
 
 ## 2. Configure npm Trusted Publisher
 
@@ -33,8 +31,6 @@ On [npmjs.com](https://www.npmjs.com/) → **catholic-mass-readings** → **Sett
 | Environment       | `release`                             |
 
 The workflow filename and environment must match the `publish` job in [.github/workflows/release-please.yml](.github/workflows/release-please.yml) exactly.
-
-If you previously configured `publish.yml`, update the Trusted Publisher workflow filename on npmjs.com.
 
 ## 3. GitHub repository settings
 
@@ -146,8 +142,10 @@ Install the [Renovate GitHub App](https://github.com/apps/renovate) on the repos
 4. GitHub Release is created → `release-please.yml` publishes to npm with provenance
 5. The same workflow deploys TypeDoc to GitHub Pages
 
+To trigger a publish manually (e.g., after a hotfix), use **Actions → Release Please → Run workflow** on `main`.
+
 ## Troubleshooting OIDC publish
 
-- **ENEEDAUTH**: Ensure npm CLI >= 11.5.1 (workflow upgrades npm globally). The publish step strips empty `_authToken` lines from `.npmrc` if setup-node wrote them.
+- **ENEEDAUTH**: Ensure npm CLI >= 11.5.1 (workflow pins `npm@12.0.1`). The publish step strips empty `_authToken` lines from `.npmrc` if setup-node wrote them.
 - **404 on publish**: Trusted Publisher workflow filename, environment name, or repository URL in `package.json` may not match npm configuration.
 - **Provenance**: Enabled via `publishConfig.provenance` in `package.json` and `--provenance` in the workflow.

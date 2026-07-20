@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.5.0](https://github.com/andrewtryder/catholic-mass-readings/compare/v0.4.1...v0.5.0) (2026-07-20)
+
+
+### Features
+
+* add typed serialization dtos and option validation ([8322df2](https://github.com/andrewtryder/catholic-mass-readings/commit/8322df24d09895901876c11d14c8be267ac06967))
+* add typed serialization dtos, option validation, and dev guide ([f7df482](https://github.com/andrewtryder/catholic-mass-readings/commit/f7df48216277d0847c5630fa9ec7d827e0cd697a))
+
+
+### Bug Fixes
+
+* for pull request finding 'CodeQL / Incomplete URL substring sanitization' ([bae8ca9](https://github.com/andrewtryder/catholic-mass-readings/commit/bae8ca956077c5e80cb9787b00d34a8417b56d18))
+* harden error propagation, scheme checks, and range tracking ([0311388](https://github.com/andrewtryder/catholic-mass-readings/commit/0311388d508a4bdc1d2bf9ecfdcd9a11079ae07b))
+* harden error propagation, scheme checks, and range tracking ([f5abe09](https://github.com/andrewtryder/catholic-mass-readings/commit/f5abe092ab15fc5501e96644cd943bfebeff7275))
+* resolve remaining p1 architecture findings ([5f1984f](https://github.com/andrewtryder/catholic-mass-readings/commit/5f1984f068e0902b57d91bb3cfc63c327dba43ef))
+
 ## [0.4.1](https://github.com/andrewtryder/catholic-mass-readings/compare/v0.4.0...v0.4.1) (2026-07-20)
 
 

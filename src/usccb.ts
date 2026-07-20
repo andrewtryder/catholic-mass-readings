@@ -4,7 +4,12 @@ import type { Element } from "domhandler";
 import { OR_PATTERN, SUNDAY_DAY_OF_WEEK } from "./constants.js";
 import type { HttpClient, HttpRequestOptions, HttpResponse } from "./http.js";
 import { createFetchClient } from "./http.js";
-import { USCCBArgumentError, USCCBError, USCCBNetworkError } from "./errors.js";
+import {
+  USCCBArgumentError,
+  USCCBError,
+  USCCBNetworkError,
+  USCCBParseError,
+} from "./errors.js";
 
 const MAX_RETRIES = 2;
 import { resetObolusState } from "./http-obolus.js";
@@ -317,7 +322,32 @@ export class USCCB {
   ): Mass {
     const $ = cheerio.load(html);
     const title = $("title").text().trim().split("|")[0].trim();
+    if (!title) {
+      throw new USCCBParseError("USCCB page did not contain a title");
+    }
+
     const sections = this.getSections($);
+    if (sections.length === 0) {
+      throw new USCCBParseError(
+        "USCCB page contained no recognizable reading sections"
+      );
+    }
+
+    const hasReadingContent = sections.some((section) =>
+      section.readings.some(
+        (reading) =>
+          reading.text.trim().length > 0 ||
+          reading.verses.some(
+            (v) => v.text.trim().length > 0 || v.link.trim().length > 0
+          )
+      )
+    );
+    if (!hasReadingContent) {
+      throw new USCCBParseError(
+        "USCCB page contained no reading text or citations"
+      );
+    }
+
     return { date, type, url, title, sections };
   }
 

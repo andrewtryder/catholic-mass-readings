@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-import { USCCBArgumentError } from "../src/errors.js";
+import { USCCBArgumentError, USCCBParseError } from "../src/errors.js";
 import type { HttpClient } from "../src/http.js";
 import { MassType, massToDict, parseMassType } from "../src/models.js";
 import { cleanText, USCCB } from "../src/usccb.js";
@@ -280,5 +280,92 @@ describe("parseMassType", () => {
   it("parses case-insensitively", () => {
     expect(parseMassType("vigil")).toBe(MassType.VIGIL);
     expect(parseMassType("YearA")).toBe(MassType.YEARA);
+  });
+});
+
+describe("parseMass contract validation", () => {
+  const usccb = new USCCB({
+    async get() {
+      return { text: "", ok: true, status: 200, url: "" };
+    },
+    async head(url: string) {
+      return { text: "", ok: true, status: 200, url };
+    },
+  });
+
+  it("throws USCCBParseError when page did not contain a title", () => {
+    const html = `
+      <html>
+        <body>
+          <div class="container">
+            <div class="name">First Reading</div>
+            <div class="address"><a href="bible/gen/1/1">Gen 1:1</a></div>
+            <div class="content-body">In the beginning...</div>
+          </div>
+        </body>
+      </html>
+    `;
+    expect(() =>
+      usccb.parseMass(html, "https://bible.usccb.org/test", null, null)
+    ).toThrow(USCCBParseError);
+    expect(() =>
+      usccb.parseMass(html, "https://bible.usccb.org/test", null, null)
+    ).toThrow("USCCB page did not contain a title");
+  });
+
+  it("throws USCCBParseError when page contained no recognizable reading sections", () => {
+    const html = `
+      <html>
+        <head><title>Daily Readings | USCCB</title></head>
+        <body>
+          <div>No reading container here</div>
+        </body>
+      </html>
+    `;
+    expect(() =>
+      usccb.parseMass(html, "https://bible.usccb.org/test", null, null)
+    ).toThrow(USCCBParseError);
+    expect(() =>
+      usccb.parseMass(html, "https://bible.usccb.org/test", null, null)
+    ).toThrow("USCCB page contained no recognizable reading sections");
+  });
+
+  it("throws USCCBParseError when reading sections contain no text or citations", () => {
+    const html = `
+      <html>
+        <head><title>Daily Readings | USCCB</title></head>
+        <body>
+          <div class="container">
+            <div class="name">First Reading</div>
+            <div class="address">   </div>
+            <div class="content-body">   </div>
+          </div>
+        </body>
+      </html>
+    `;
+    expect(() =>
+      usccb.parseMass(html, "https://bible.usccb.org/test", null, null)
+    ).toThrow(USCCBParseError);
+    expect(() =>
+      usccb.parseMass(html, "https://bible.usccb.org/test", null, null)
+    ).toThrow("USCCB page contained no recognizable reading sections");
+  });
+
+  it("throws USCCBParseError when section has no reading content", () => {
+    const html = `
+      <html>
+        <head><title>Daily Readings | USCCB</title></head>
+        <body>
+          <div class="container">
+            <div class="name">First Reading</div>
+            <div class="address"><a href="">   </a></div>
+            <div class="content-body">   </div>
+          </div>
+        </body>
+      </html>
+    `;
+    expect(() =>
+      usccb.parseMass(html, "https://bible.usccb.org/test", null, null)
+    ).toThrow("USCCB page contained no reading text or citations");
   });
 });

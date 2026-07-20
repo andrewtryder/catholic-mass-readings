@@ -1,9 +1,14 @@
 import { describe, expect, it } from "vitest";
 
+import { USCCBArgumentError } from "../src/errors.js";
 import {
+  addDays,
+  assertValidDate,
+  formatUrlDate,
   getBookFromVerse,
   getReadingNumber,
   lookupBook,
+  parseIsoDate,
   parseUrl,
   stripBookAbbreviationsFromText,
 } from "../src/utils.js";
@@ -59,5 +64,56 @@ describe("getBookFromVerse", () => {
       getBookFromVerse("https://bible.usccb.org/bible/luke/1?57", "Lk 1:26-38")
         ?.name
     ).toBe("Luke");
+  });
+});
+
+describe("assertValidDate", () => {
+  it("accepts valid finite dates", () => {
+    expect(() => assertValidDate(new Date(2025, 0, 1), "date")).not.toThrow();
+  });
+
+  it("throws USCCBArgumentError for invalid finite date or non-date", () => {
+    expect(() => assertValidDate(new Date(NaN), "date")).toThrow(
+      USCCBArgumentError
+    );
+    expect(() =>
+      assertValidDate("2025-01-01" as unknown as Date, "date")
+    ).toThrow(USCCBArgumentError);
+  });
+});
+
+describe("parseIsoDate", () => {
+  it("parses valid YYYY-MM-DD date strings", () => {
+    expect(parseIsoDate("2025-01-15")).toEqual(new Date(2025, 0, 15));
+  });
+
+  it("throws USCCBArgumentError on rollover dates like 2025-02-31", () => {
+    expect(() => parseIsoDate("2025-02-31")).toThrow(USCCBArgumentError);
+    expect(() => parseIsoDate("2026-99-99")).toThrow(USCCBArgumentError);
+  });
+
+  it("throws USCCBArgumentError on malformed format strings", () => {
+    expect(() => parseIsoDate("2025-1-1")).toThrow(USCCBArgumentError);
+    expect(() => parseIsoDate("invalid")).toThrow(USCCBArgumentError);
+  });
+});
+
+describe("formatUrlDate", () => {
+  it("formats date into MMDDYY", () => {
+    expect(formatUrlDate(new Date(2025, 11, 25))).toBe("122525");
+  });
+
+  it("throws USCCBArgumentError when given invalid date", () => {
+    expect(() => formatUrlDate(new Date(NaN))).toThrow(USCCBArgumentError);
+  });
+});
+
+describe("addDays", () => {
+  it("adds calendar days to valid date", () => {
+    expect(addDays(new Date(2025, 0, 1), 10)).toEqual(new Date(2025, 0, 11));
+  });
+
+  it("throws USCCBArgumentError when given invalid date", () => {
+    expect(() => addDays(new Date(NaN), 10)).toThrow(USCCBArgumentError);
   });
 });

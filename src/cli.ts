@@ -39,18 +39,7 @@ function formatIsoDate(date: Date): string {
 }
 
 function parseDateOption(value: string): Date {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    throw new USCCBArgumentError(
-      `Invalid date format: ${value}. Expected ${DATE_FMT}`
-    );
-  }
-  const date = parseIsoDate(value);
-  if (isNaN(date.getTime()) || formatIsoDate(date) !== value) {
-    throw new USCCBArgumentError(
-      `Invalid date format: ${value}. Expected valid calendar date in ${DATE_FMT}`
-    );
-  }
-  return date;
+  return parseIsoDate(value);
 }
 
 function parseMassTypes(values: string[] | undefined): MassType[] | undefined {

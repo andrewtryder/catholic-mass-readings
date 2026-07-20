@@ -90,6 +90,36 @@ describe("CLI process tests", () => {
         "Invalid date format: 12/25/2026. Expected YYYY-MM-DD"
       );
     });
+
+    it("rejects non-positive step on get-mass-range", async () => {
+      const result = await runCli([
+        "get-mass-range",
+        "--start",
+        "2026-07-01",
+        "--step",
+        "0",
+      ]);
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("[ERROR]");
+      expect(result.stderr).toContain(
+        "stepDays must be a positive integer; received 0"
+      );
+    });
+
+    it("rejects fractional step on get-mass-range", async () => {
+      const result = await runCli([
+        "get-mass-range",
+        "--start",
+        "2026-07-01",
+        "--step",
+        "1.5",
+      ]);
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("[ERROR]");
+      expect(result.stderr).toContain(
+        "stepDays must be a positive integer; received 1.5"
+      );
+    });
   });
 
   describe("network failures", () => {

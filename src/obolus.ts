@@ -41,25 +41,62 @@ export function parseObolusConfig(html: string): ObolusConfig {
   const challengeTimestamp = extractConfigValue(html, "challengeTimestamp");
   const difficultyRaw = extractConfigValue(html, "difficulty");
   const mode = extractConfigValue(html, "mode") ?? "default";
-  const maxTime = Number(extractConfigValue(html, "maxTime") ?? "4000");
+  const maxTimeRaw = Number(extractConfigValue(html, "maxTime") ?? "4000");
   const benchmarkMatch = html.match(
     /benchmarkElapsed:\s*parseInt\(['"](\d+)['"]/
   );
-  const benchmarkElapsed = benchmarkMatch ? Number(benchmarkMatch[1]) : 0;
+  const benchmarkElapsedRaw = benchmarkMatch ? Number(benchmarkMatch[1]) : 0;
 
   if (!nonce || !challengeToken || !challengeTimestamp || !difficultyRaw) {
     throw new USCCBParseError("Failed to parse Obolus challenge configuration");
   }
 
-  const difficulty =
-    difficultyRaw === "adaptive" ? 14 : Number.parseInt(difficultyRaw, 10);
+  if (
+    nonce.length === 0 ||
+    nonce.length > 128 ||
+    challengeToken.length === 0 ||
+    challengeToken.length > 256 ||
+    challengeTimestamp.length === 0 ||
+    challengeTimestamp.length > 64
+  ) {
+    throw new USCCBParseError(
+      "Obolus challenge parameters exceed maximum allowed length"
+    );
+  }
+
+  if (
+    !Number.isFinite(benchmarkElapsedRaw) ||
+    benchmarkElapsedRaw < 0 ||
+    benchmarkElapsedRaw > 120_000
+  ) {
+    throw new USCCBParseError("Invalid benchmarkElapsed timing in challenge");
+  }
+
+  if (!Number.isFinite(maxTimeRaw) || maxTimeRaw < 0 || maxTimeRaw > 300_000) {
+    throw new USCCBParseError("Invalid maxTime in challenge");
+  }
+
+  const maxTime = Math.max(100, Math.min(30_000, maxTimeRaw));
+
+  let difficulty: number;
+  if (difficultyRaw === "adaptive") {
+    difficulty = 14;
+  } else {
+    const parsed = Number.parseInt(difficultyRaw, 10);
+    if (!Number.isFinite(parsed)) {
+      throw new USCCBParseError("Invalid difficulty value in challenge");
+    }
+    difficulty = parsed;
+  }
+
+  difficulty = Math.max(1, Math.min(20, difficulty));
 
   return {
     nonce,
     challengeToken,
     challengeTimestamp,
     difficulty,
-    benchmarkElapsed,
+    benchmarkElapsed: benchmarkElapsedRaw,
     maxTime,
     mode,
   };
@@ -70,9 +107,15 @@ export function calculateAdaptiveDifficulty(
   benchmarkElapsed: number,
   maxTime: number
 ): number {
+  if (benchmarkElapsed <= 0 || !Number.isFinite(benchmarkElapsed)) {
+    return 14;
+  }
   const hashesPerMs = BENCHMARK_ITERATIONS / benchmarkElapsed;
   const targetTime = maxTime * 0.75;
   const expectedAttempts = targetTime * hashesPerMs;
+  if (!Number.isFinite(expectedAttempts) || expectedAttempts <= 0) {
+    return 14;
+  }
   const rawDifficulty = Math.log2(expectedAttempts);
   return Math.max(12, Math.min(18, Math.floor(rawDifficulty)));
 }
@@ -95,17 +138,20 @@ export function countLeadingZeroBits(hexString: string): number {
 /** Solve a USCCB access challenge. */
 export async function computeObolusProof(
   config: ObolusConfig,
-  options: { forceDifficulty?: number } = {}
+  options: { forceDifficulty?: number; signal?: AbortSignal | null } = {}
 ): Promise<ObolusProofResult> {
   const startTime = Date.now();
+  if (options.signal?.aborted) options.signal.throwIfAborted();
+
   let benchmarkElapsed = config.benchmarkElapsed;
 
-  if (!benchmarkElapsed) {
+  if (!benchmarkElapsed || benchmarkElapsed <= 0) {
     const benchmarkStart = Date.now();
     for (let i = 0; i < BENCHMARK_ITERATIONS; i++) {
+      if (options.signal?.aborted) options.signal.throwIfAborted();
       sha256Hex(`${config.nonce}:benchmark:${i}`);
     }
-    benchmarkElapsed = Date.now() - benchmarkStart;
+    benchmarkElapsed = Math.max(1, Date.now() - benchmarkStart);
   }
 
   const targetBits = resolveTargetDifficulty(
@@ -118,6 +164,7 @@ export async function computeObolusProof(
   let found = false;
 
   while (!found) {
+    if (options.signal?.aborted) options.signal.throwIfAborted();
     const hashHex = sha256Hex(`${config.nonce}:mine:${nonce}`);
     if (countLeadingZeroBits(hashHex) >= targetBits) {
       found = true;
@@ -146,13 +193,18 @@ export function buildObolusProofCookie(
 }
 
 /** Parse challenge HTML, solve it, and return the proof cookie value. */
-export async function solveObolusChallenge(html: string): Promise<string> {
+export async function solveObolusChallenge(
+  html: string,
+  options: { signal?: AbortSignal | null } = {}
+): Promise<string> {
   const config = parseObolusConfig(html);
-  let result = await computeObolusProof(config);
+  let result = await computeObolusProof(config, { signal: options.signal });
 
   if (!result.found && config.mode === "aggressive") {
+    if (options.signal?.aborted) options.signal.throwIfAborted();
     result = await computeObolusProof(config, {
       forceDifficulty: BASELINE_DIFFICULTY,
+      signal: options.signal,
     });
   }
 
@@ -168,14 +220,14 @@ function resolveTargetDifficulty(
   forceDifficulty?: number
 ): number {
   if (forceDifficulty !== undefined && forceDifficulty > 0) {
-    return forceDifficulty;
+    return Math.max(1, Math.min(20, Math.floor(forceDifficulty)));
   }
 
   if (config.mode === "aggressive") {
     return calculateAdaptiveDifficulty(benchmarkElapsed, config.maxTime);
   }
 
-  return config.difficulty;
+  return Math.max(1, Math.min(20, config.difficulty));
 }
 
 function sha256Hex(input: string): string {

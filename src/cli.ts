@@ -44,7 +44,13 @@ function parseDateOption(value: string): Date {
       `Invalid date format: ${value}. Expected ${DATE_FMT}`
     );
   }
-  return parseIsoDate(value);
+  const date = parseIsoDate(value);
+  if (isNaN(date.getTime()) || formatIsoDate(date) !== value) {
+    throw new USCCBArgumentError(
+      `Invalid date format: ${value}. Expected valid calendar date in ${DATE_FMT}`
+    );
+  }
+  return date;
 }
 
 function parseMassTypes(values: string[] | undefined): MassType[] | undefined {
@@ -86,35 +92,24 @@ function setLogLevel(levelName: string) {
   }
 }
 
+function log(
+  messageLevel: number,
+  prefix: string,
+  args: readonly unknown[]
+): void {
+  if (
+    currentLogLevel !== LOG_LEVELS.NOTSET &&
+    currentLogLevel <= messageLevel
+  ) {
+    console.error(prefix, ...args);
+  }
+}
+
 const logger = {
-  debug: (...args: unknown[]) => {
-    if (
-      currentLogLevel <= LOG_LEVELS.DEBUG &&
-      currentLogLevel !== LOG_LEVELS.NOTSET
-    )
-      logger.error("[DEBUG]", ...args);
-  },
-  info: (...args: unknown[]) => {
-    if (
-      currentLogLevel <= LOG_LEVELS.INFO &&
-      currentLogLevel !== LOG_LEVELS.NOTSET
-    )
-      logger.error("[INFO]", ...args);
-  },
-  warn: (...args: unknown[]) => {
-    if (
-      currentLogLevel <= LOG_LEVELS.WARNING &&
-      currentLogLevel !== LOG_LEVELS.NOTSET
-    )
-      logger.error("[WARNING]", ...args);
-  },
-  error: (...args: unknown[]) => {
-    if (
-      currentLogLevel <= LOG_LEVELS.ERROR &&
-      currentLogLevel !== LOG_LEVELS.NOTSET
-    )
-      logger.error("[ERROR]", ...args);
-  },
+  debug: (...args: unknown[]) => log(LOG_LEVELS.DEBUG, "[DEBUG]", args),
+  info: (...args: unknown[]) => log(LOG_LEVELS.INFO, "[INFO]", args),
+  warn: (...args: unknown[]) => log(LOG_LEVELS.WARNING, "[WARNING]", args),
+  error: (...args: unknown[]) => log(LOG_LEVELS.ERROR, "[ERROR]", args),
 };
 
 const today = todayInNewYork();

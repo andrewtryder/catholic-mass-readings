@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.5.3](https://github.com/andrewtryder/catholic-mass-readings/compare/v0.5.2...v0.5.3) (2026-07-21)
+
+
+### Bug Fixes
+
+* **deps:** enforce node 20 compatibility ([4651d35](https://github.com/andrewtryder/catholic-mass-readings/commit/4651d352c56d92df302f0254874fc5c116aeabd0))
+* **deps:** enforce node 20 compatibility and enable release-please ([357b6cf](https://github.com/andrewtryder/catholic-mass-readings/commit/357b6cf8993d99751573c97dbf1304bc5ea1dc30))
+
+
+### Continuous Integration & Tooling Compatibility
+
+* add circleci daily canary and healthchecks monitoring ([fa7a804](https://github.com/andrewtryder/catholic-mass-readings/commit/fa7a804aeb9347eee63219ef9547cf24817b75a5))
+* add circleci daily canary and healthchecks monitoring ([c28a8d6](https://github.com/andrewtryder/catholic-mass-readings/commit/c28a8d6ea9cfa34f9eee532e4438c0adb41b936f))
+* enforce node 20 compatibility before commits ([d4bc2a9](https://github.com/andrewtryder/catholic-mass-readings/commit/d4bc2a9850594d77f4fbb88e21521498b15542ea))
+* enforce Node 20 compatibility before commits ([e82a43b](https://github.com/andrewtryder/catholic-mass-readings/commit/e82a43b7aed5bfaf0bce3db9b3fea4794101a2ba))
+
 ## [0.5.2](https://github.com/andrewtryder/catholic-mass-readings/compare/v0.5.1...v0.5.2) (2026-07-21)
 
 

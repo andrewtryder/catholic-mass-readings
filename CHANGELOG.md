@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.1](https://github.com/andrewtryder/catholic-mass-readings/compare/v0.5.0...v0.5.1) (2026-07-21)
+
+
+### Bug Fixes
+
+* **deps:** restore @types/node to ^20.0.0 and pin in renovate ([bce6d4d](https://github.com/andrewtryder/catholic-mass-readings/commit/bce6d4ddd38dfb40a3351b06f597c432e1b4714d))
+* P2/P3 node types pin, getMassTypes outage detection, obolus global fallback, error constructor ([c2e1475](https://github.com/andrewtryder/catholic-mass-readings/commit/c2e1475661ab443700a37cc443026be5a165cbc5))
+
 ## [0.5.0](https://github.com/andrewtryder/catholic-mass-readings/compare/v0.4.1...v0.5.0) (2026-07-20)
 
 

@@ -4,3 +4,9 @@ coverage/
 *.log
 .DS_Store
 dist/
+.env
+.env.*
+!.env.example
+
+# Local CircleCI project link
+.circleci/info.yml

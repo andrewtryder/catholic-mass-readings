@@ -30,6 +30,24 @@
       "matchPackageNames": ["@types/node"],
       "allowedVersions": "20.x",
       "groupName": "minimum Node compatibility types"
+    },
+    {
+      "matchPackageNames": ["commander"],
+      "allowedVersions": "<15.0.0",
+      "groupName": "Node >= 20 compatible commander"
+    },
+    {
+      "matchPackageNames": [
+        "@commitlint/cli",
+        "@commitlint/config-conventional"
+      ],
+      "allowedVersions": "<21.0.0",
+      "groupName": "Node >= 20 compatible commitlint"
+    },
+    {
+      "matchPackageNames": ["lint-staged"],
+      "allowedVersions": "<17.0.0",
+      "groupName": "Node >= 20 compatible lint-staged"
     }
   ]
 }

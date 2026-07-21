@@ -51,6 +51,7 @@ jobs:
 
               # Install from npm rather than using the repository checkout.
               npm install \
+                --engine-strict \
                 --omit=dev \
                 --no-audit \
                 --no-fund \

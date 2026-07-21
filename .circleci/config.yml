@@ -8,7 +8,7 @@ parameters:
 jobs:
   published-package-canary:
     docker:
-      - image: cimg/node:20.20.2
+      - image: cimg/node:24.18.0
     resource_class: small
 
     steps:

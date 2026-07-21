@@ -20,7 +20,6 @@ function isNetworkErrorOptions(
     return false;
   }
   const keys = Object.keys(value);
-  if (keys.length === 0) return false;
   return keys.every((key) =>
     ["cause", "status", "url", "retryable"].includes(key)
   );

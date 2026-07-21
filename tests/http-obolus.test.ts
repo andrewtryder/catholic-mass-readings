@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { resetObolusState, wrapFetchWithObolus } from "../src/http-obolus.js";
+import { wrapFetchWithObolus } from "../src/http-obolus.js";
 import { USCCBArgumentError } from "../src/errors.js";
 
 vi.mock("../src/obolus.js", async (importOriginal) => {
@@ -39,7 +39,6 @@ function mockResponse(
 
 describe("wrapFetchWithObolus", () => {
   beforeEach(() => {
-    resetObolusState();
     vi.clearAllMocks();
   });
 
@@ -223,7 +222,7 @@ describe("wrapFetchWithObolus", () => {
     ).rejects.toThrow(/exceeded maximum allowed size/i);
   });
 
-  it("supports client-local reset via wrapped.reset() and prunes dead WeakRef entries", async () => {
+  it("supports client-local reset via wrapped.reset()", async () => {
     const fetchImpl1 = vi
       .fn()
       .mockResolvedValueOnce(mockResponse(403, challengeHtml))
@@ -238,8 +237,6 @@ describe("wrapFetchWithObolus", () => {
     wrapped1.reset();
     await wrapped1("https://bible.usccb.org/bible/readings/080625.cfm");
     expect(fetchImpl1).toHaveBeenCalledTimes(4);
-
-    expect(() => resetObolusState()).not.toThrow();
   });
 
   it("rejects negative, fractional, and nonfinite maxResponseSizeBytes", () => {
@@ -255,5 +252,134 @@ describe("wrapFetchWithObolus", () => {
     expect(() =>
       wrapFetchWithObolus(vi.fn(), { maxResponseSizeBytes: Infinity })
     ).toThrow(USCCBArgumentError);
+  });
+
+  // --- P2 tests: HEAD challenge GET preserves init ---
+
+  it("HEAD challenge GET receives the original headers", async () => {
+    const capturedInits: RequestInit[] = [];
+    const fetchImpl = vi.fn(
+      async (_input: string | URL | Request, init?: RequestInit) => {
+        if (init) capturedInits.push(init);
+        // HEAD → 403 (triggers challenge GET), challenge GET → returns challenge
+        if (capturedInits.length === 1) return mockResponse(403, "");
+        if (capturedInits.length === 2) return mockResponse(403, challengeHtml);
+        // retry HEAD → 200
+        return mockResponse(200, "");
+      }
+    );
+
+    const wrapped = wrapFetchWithObolus(fetchImpl);
+    await wrapped("https://bible.usccb.org/bible/readings/080625.cfm", {
+      method: "HEAD",
+      headers: {
+        Accept: "text/html",
+        "Accept-Language": "en-US",
+        "User-Agent": "TestBot/1.0",
+      },
+    });
+
+    // The challenge GET (2nd call) should carry the original headers
+    const challengeInit = capturedInits[1];
+    const headers = new Headers(challengeInit.headers);
+    expect(challengeInit.method).toBe("GET");
+    expect(headers.get("Accept")).toBe("text/html");
+    expect(headers.get("Accept-Language")).toBe("en-US");
+    expect(headers.get("User-Agent")).toBe("TestBot/1.0");
+    expect(challengeInit.redirect).toBe("manual");
+  });
+
+  it("cross-origin redirect from the challenge GET does not contact its target", async () => {
+    const contactedUrls: string[] = [];
+    const fetchImpl = vi.fn(
+      async (input: string | URL | Request, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.toString();
+        contactedUrls.push(url);
+
+        const method = init?.method ?? "GET";
+        // HEAD → 403
+        if (method === "HEAD") return mockResponse(403, "");
+        // Challenge GET → returns 302 to cross-origin
+        return {
+          ok: false,
+          status: 302,
+          url,
+          headers: new Headers({
+            location: "https://evil.example.com/steal",
+          }),
+          text: async (): Promise<string> => "",
+        };
+      }
+    );
+
+    const wrapped = wrapFetchWithObolus(fetchImpl);
+    const response = await wrapped(
+      "https://bible.usccb.org/bible/readings/080625.cfm",
+      { method: "HEAD" }
+    );
+
+    // The challenge GET returns a 302, which the wrapper returns untouched
+    expect(response.status).toBe(302);
+    // The evil URL was never contacted — only the original USCCB URL was fetched
+    expect(
+      contactedUrls.every((u) => u.startsWith("https://bible.usccb.org/"))
+    ).toBe(true);
+  });
+
+  it("withCookie enforces redirect: manual even without a proof cookie", async () => {
+    const capturedInits: RequestInit[] = [];
+    const fetchImpl = vi.fn(
+      async (_input: string | URL | Request, init?: RequestInit) => {
+        if (init) capturedInits.push(init);
+        return mockResponse(200, successHtml);
+      }
+    );
+
+    const wrapped = wrapFetchWithObolus(fetchImpl);
+    // First request — no proof cookie cached yet
+    await wrapped("https://bible.usccb.org/bible/readings/080625.cfm");
+
+    // Even with no cookie, the redirect policy should be manual
+    expect(capturedInits[0].redirect).toBe("manual");
+  });
+
+  it("custom headers survive both challenge and verification GETs", async () => {
+    const capturedInits: RequestInit[] = [];
+    let callCount = 0;
+    const fetchImpl = vi.fn(
+      async (_input: string | URL | Request, init?: RequestInit) => {
+        if (init) capturedInits.push(init);
+        callCount++;
+        // Call 1: HEAD → 403
+        // Call 2: challenge GET → challenge
+        // Call 3: retry HEAD → 403 again
+        // Call 4: verification GET → challenge (to exercise both paths)
+        // Call 5: next attempt HEAD → 200
+        if (callCount === 1) return mockResponse(403, "");
+        if (callCount === 2) return mockResponse(403, challengeHtml);
+        if (callCount === 3) return mockResponse(403, "");
+        if (callCount === 4) return mockResponse(403, challengeHtml);
+        return mockResponse(200, "");
+      }
+    );
+
+    const wrapped = wrapFetchWithObolus(fetchImpl);
+    await wrapped("https://bible.usccb.org/bible/readings/080625.cfm", {
+      method: "HEAD",
+      headers: {
+        "X-Custom-Header": "keep-me",
+        "Accept-Language": "fr-FR",
+      },
+    });
+
+    // Challenge GET is call index 1, verification GET is call index 3
+    for (const idx of [1, 3]) {
+      const init = capturedInits[idx];
+      const headers = new Headers(init.headers);
+      expect(init.method).toBe("GET");
+      expect(headers.get("X-Custom-Header")).toBe("keep-me");
+      expect(headers.get("Accept-Language")).toBe("fr-FR");
+      expect(init.redirect).toBe("manual");
+    }
   });
 });

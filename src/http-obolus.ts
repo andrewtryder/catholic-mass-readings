@@ -74,8 +74,6 @@ export type ObolusFetchLike = FetchLike & {
   forceReset(origin?: string): void;
 };
 
-const activeStores = new Set<WeakRef<ObolusStore>>();
-
 /** Wrap a fetch implementation with USCCB-specific retry handling for live requests. */
 export function wrapFetchWithObolus(
   fetchImpl: FetchLike,
@@ -92,7 +90,6 @@ export function wrapFetchWithObolus(
     );
   }
   const store = new ObolusStore();
-  activeStores.add(new WeakRef(store));
   const maxBytes = options.maxResponseSizeBytes ?? 3 * 1024 * 1024;
 
   const wrapped: FetchLike = async (input, init) => {
@@ -132,18 +129,6 @@ export function wrapFetchWithObolus(
     reset: (origin?: string) => store.reset(origin),
     forceReset: (origin?: string) => store.forceReset(origin),
   });
-}
-
-/** Reset cached proof state (for tests and recovery retries). */
-export function resetObolusState(origin?: string): void {
-  for (const ref of activeStores) {
-    const store = ref.deref();
-    if (store) {
-      store.forceReset(origin);
-    } else {
-      activeStores.delete(ref);
-    }
-  }
 }
 
 function getRequestUrl(input: string | URL | Request): URL {
@@ -237,7 +222,14 @@ async function fetchHeadWithObolus(
 
     const challengeResponse = await fetchImpl(
       urlStr,
-      withCookie({ method: "GET", signal: init?.signal }, proofCookie)
+      withCookie(
+        {
+          ...init,
+          method: "GET",
+          redirect: "manual",
+        },
+        proofCookie
+      )
     );
     if (challengeResponse.status >= 300 && challengeResponse.status < 400) {
       return challengeResponse;
@@ -266,7 +258,14 @@ async function fetchHeadWithObolus(
 
     const verifyResponse = await fetchImpl(
       urlStr,
-      withCookie({ method: "GET", signal: init?.signal }, retryProofCookie)
+      withCookie(
+        {
+          ...init,
+          method: "GET",
+          redirect: "manual",
+        },
+        retryProofCookie
+      )
     );
     if (verifyResponse.status >= 300 && verifyResponse.status < 400) {
       return verifyResponse;
@@ -326,13 +325,17 @@ function withCookie(
   init: RequestInit | undefined,
   cookie: string | null
 ): RequestInit {
-  if (!cookie) {
-    return init ?? {};
+  const headers = new Headers(init?.headers);
+
+  if (cookie) {
+    const existing = headers.get("Cookie");
+    const proof = `${PROOF_COOKIE_NAME}=${cookie}`;
+    headers.set("Cookie", existing ? `${existing}; ${proof}` : proof);
   }
 
-  const headers = new Headers(init?.headers);
-  const existing = headers.get("Cookie");
-  const proof = `${PROOF_COOKIE_NAME}=${cookie}`;
-  headers.set("Cookie", existing ? `${existing}; ${proof}` : proof);
-  return { ...init, headers, redirect: init?.redirect ?? "manual" };
+  return {
+    ...init,
+    headers,
+    redirect: init?.redirect ?? "manual",
+  };
 }

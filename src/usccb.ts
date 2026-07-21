@@ -12,7 +12,6 @@ import {
 } from "./errors.js";
 
 const MAX_RETRIES = 2;
-import { resetObolusState } from "./http-obolus.js";
 import { isObolusChallenge } from "./obolus.js";
 import {
   MassType,
@@ -186,11 +185,7 @@ export class USCCB {
     }
     for (let recovery = 0; recovery < MAX_RETRIES; recovery++) {
       if (recovery > 0) {
-        if (typeof this.client.reset === "function") {
-          this.client.reset();
-        } else {
-          resetObolusState();
-        }
+        this.client.reset?.();
       }
 
       let hitRetryableError = false;
@@ -280,32 +275,56 @@ export class USCCB {
       }))
     );
 
-    if (
-      checks.length > 0 &&
-      checks.every((item) => item.status === "rejected")
-    ) {
-      const firstError = (checks[0] as PromiseRejectedResult).reason;
-      if (firstError instanceof USCCBError) {
-        throw firstError;
-      }
-      const message =
-        firstError instanceof Error ? firstError.message : String(firstError);
-      throw new USCCBNetworkError(`Failed to probe mass types: ${message}`, {
-        cause: firstError,
-      });
+    type FulfilledCheck = PromiseFulfilledResult<{
+      type: MassType;
+      response: HttpResponse;
+    }>;
+
+    const successful = checks
+      .filter(
+        (item): item is FulfilledCheck =>
+          item.status === "fulfilled" && item.value.response.ok
+      )
+      .map((item) => item.value.type);
+
+    if (successful.length > 0) {
+      return successful.sort((a, b) => a.localeCompare(b));
     }
 
-    return checks
-      .filter(
-        (
-          item
-        ): item is PromiseFulfilledResult<{
-          type: MassType;
-          response: HttpResponse;
-        }> => item.status === "fulfilled" && item.value.response.ok
-      )
-      .map((item) => item.value.type)
-      .sort((a, b) => a.localeCompare(b));
+    const fulfilled = checks.filter(
+      (item): item is FulfilledCheck => item.status === "fulfilled"
+    );
+
+    const onlyNotFound =
+      fulfilled.length === checks.length &&
+      fulfilled.every((item) => item.value.response.status === 404);
+
+    if (onlyNotFound) {
+      return [];
+    }
+
+    const retryable = fulfilled.some((item) =>
+      [403, 429, 502, 503, 504].includes(item.value.response.status)
+    );
+
+    const firstRejected = checks.find(
+      (item): item is PromiseRejectedResult => item.status === "rejected"
+    );
+    if (firstRejected) {
+      const reason = firstRejected.reason;
+      if (reason instanceof USCCBError) {
+        throw reason;
+      }
+      const message = reason instanceof Error ? reason.message : String(reason);
+      throw new USCCBNetworkError(
+        `Failed to determine available Mass types: ${message}`,
+        { cause: reason, retryable }
+      );
+    }
+
+    throw new USCCBNetworkError("Failed to determine available Mass types", {
+      retryable,
+    });
   }
 
   private async fetchMass(

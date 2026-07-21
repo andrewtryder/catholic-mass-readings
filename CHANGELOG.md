@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.2](https://github.com/andrewtryder/catholic-mass-readings/compare/v0.5.1...v0.5.2) (2026-07-21)
+
+
+### Bug Fixes
+
+* preserve init in head challenge gets, harden withcookie ([b632576](https://github.com/andrewtryder/catholic-mass-readings/commit/b632576fb18cff5f9f48e19c958329026070032a))
+* preserve init in head challenge gets, harden withcookie ([0c92abe](https://github.com/andrewtryder/catholic-mass-readings/commit/0c92abe5cef6ffa5345934900f5d4925932f7ffa))
+
 ## [0.5.1](https://github.com/andrewtryder/catholic-mass-readings/compare/v0.5.0...v0.5.1) (2026-07-21)
 
 

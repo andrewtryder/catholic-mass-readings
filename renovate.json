@@ -48,6 +48,16 @@
       "matchPackageNames": ["lint-staged"],
       "allowedVersions": "<17.0.0",
       "groupName": "Node >= 20 compatible lint-staged"
+    },
+    {
+      "matchPackageNames": ["cimg/node"],
+      "allowedVersions": "20.x",
+      "groupName": "Node >= 20 canary Docker image"
+    },
+    {
+      "matchPackageNames": ["typescript"],
+      "allowedVersions": "<6.1.0",
+      "groupName": "Node >= 20 & tooling compatible TypeScript"
     }
   ]
 }

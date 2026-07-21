@@ -1,0 +1,94 @@
+version: 2.1
+
+parameters:
+  daily_canary:
+    type: boolean
+    default: false
+
+jobs:
+  published-package-canary:
+    docker:
+      - image: cimg/node:20.19
+    resource_class: small
+
+    steps:
+      - checkout
+
+      - run:
+          name: Install and test published package
+          command: |
+            set +e
+
+            : "${HEALTHCHECKS_PING_URL:?HEALTHCHECKS_PING_URL is required}"
+
+            LOG_FILE="$(mktemp)"
+            TEMP_PROJECT="$(mktemp -d)"
+
+            cleanup() {
+              rm -rf "$TEMP_PROJECT" "$LOG_FILE"
+            }
+            trap cleanup EXIT
+
+            # Optional start signal. Failure to ping must not prevent the test.
+            curl \
+              --fail \
+              --silent \
+              --show-error \
+              --max-time 10 \
+              --retry 3 \
+              "${HEALTHCHECKS_PING_URL}/start" \
+              >/dev/null || true
+
+            (
+              set -euo pipefail
+
+              cp scripts/daily-canary.mjs "$TEMP_PROJECT/"
+              cd "$TEMP_PROJECT"
+
+              printf '%s\n' \
+                '{"name":"cmr-daily-canary","version":"1.0.0","type":"module","private":true}' \
+                > package.json
+
+              # Install from npm rather than using the repository checkout.
+              npm install \
+                --omit=dev \
+                --no-audit \
+                --no-fund \
+                catholic-mass-readings@latest
+
+              # Verify the published CLI binary.
+              npx --no-install catholic-mass-readings --help >/dev/null
+
+              # Prevent an unexpected network/challenge problem from hanging CI.
+              timeout 150s node daily-canary.mjs
+            ) >"$LOG_FILE" 2>&1
+
+            STATUS=$?
+
+            if [ "$STATUS" -eq 0 ]; then
+              PING_URL="$HEALTHCHECKS_PING_URL"
+            else
+              PING_URL="${HEALTHCHECKS_PING_URL}/fail"
+            fi
+
+            # Healthchecks stores the diagnostic output with the event.
+            curl \
+              --fail \
+              --silent \
+              --show-error \
+              --max-time 10 \
+              --retry 3 \
+              --data-binary @"$LOG_FILE" \
+              "$PING_URL" \
+              >/dev/null || true
+
+            cat "$LOG_FILE"
+            exit "$STATUS"
+
+workflows:
+  daily-live-canary:
+    when: << pipeline.parameters.daily_canary >>
+    jobs:
+      - published-package-canary:
+          context:
+            - catholic-mass-readings-monitoring

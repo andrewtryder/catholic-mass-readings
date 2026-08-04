@@ -16,13 +16,19 @@
   "keywords": [
     "catholic",
     "mass",
-    "readings",
+    "mass-readings",
+    "daily-mass",
     "usccb",
     "lectionary",
+    "catholic-liturgy",
+    "liturgical-calendar",
+    "scripture",
     "bible",
-    "liturgy",
+    "responsorial-psalm",
+    "typescript",
+    "nodejs",
     "cli",
-    "scraper"
+    "npm"
   ],
   "bin": {
     "catholic-mass-readings": "dist/cli.js"

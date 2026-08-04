@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.4](https://github.com/andrewtryder/catholic-mass-readings/compare/v0.5.3...v0.5.4) (2026-08-04)
+
+
+### chore
+
+* **package:** expand npm keywords ([6ae535f](https://github.com/andrewtryder/catholic-mass-readings/commit/6ae535f136a81b0cf7b640c941c36252345b1368))
+
 ## [0.5.3](https://github.com/andrewtryder/catholic-mass-readings/compare/v0.5.2...v0.5.3) (2026-07-21)
 
 

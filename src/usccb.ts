@@ -566,8 +566,8 @@ export function cleanText(input: string): string {
   text = text.replace(/\.([A-Z])/g, ". $1");
   text = text.replace(/,([A-Z])/g, ", $1");
   text = text.replace(/;([A-Z])/g, "; $1");
-  text = text.replace(/\n\s*\n/g, "\n\n");
-  text = text.replace(/([.!?])\s*\n([A-Z])/g, "$1\n\n$2");
+  text = text.replace(/\n[^\S\n]*\n/g, "\n\n");
+  text = text.replace(/([.!?])[^\S\n]*\n([A-Z])/g, "$1\n\n$2");
 
   const lines = text
     .split("\n")

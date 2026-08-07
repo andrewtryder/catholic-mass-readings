@@ -235,9 +235,7 @@ function sha256Hex(input: string): string {
 }
 
 function extractConfigValue(html: string, key: string): string | null {
-  const quoted = html.match(
-    new RegExp(`${key}:\\s*(?:\\n\\s*)?['"]([^'"]*)['"]`)
-  );
+  const quoted = html.match(new RegExp(`${key}:\\s*['"]([^'"]*)['"]`));
   if (quoted) {
     return quoted[1];
   }

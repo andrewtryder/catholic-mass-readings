@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.5](https://github.com/andrewtryder/catholic-mass-readings/compare/v0.5.4...v0.5.5) (2026-08-07)
+
+
+### Bug Fixes
+
+* **security:** resolve CodeQL ReDoS alerts ([#71](https://github.com/andrewtryder/catholic-mass-readings/issues/71)) ([b431d24](https://github.com/andrewtryder/catholic-mass-readings/commit/b431d24c6a7721e72878e20cda5b954ab8b30197))
+
 ## [0.5.4](https://github.com/andrewtryder/catholic-mass-readings/compare/v0.5.3...v0.5.4) (2026-08-04)
 
 

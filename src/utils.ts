@@ -9,8 +9,8 @@ import { USCCBArgumentError } from "./errors.js";
 
 const ABBREVIATED_BOOK_PATTERN = /([0-9]?\s?[A-Z][a-z]*):?/g;
 const BOOK_LINK_PATTERN = /bible\/([^/]+)/;
-const ROMAN_NUMERAL_PATTERN = /\s?([IVXLCDM]+)$/i;
-const NUMERAL_PATTERN = /\s?([0-9]+)$/i;
+const ROMAN_NUMERAL_PATTERN = /(?:\s|^)([IVXLCDM]+)$/i;
+const NUMERAL_PATTERN = /(?:\s|^)([0-9]+)$/;
 const URL_PATTERN = /readings\/(?<DATE>\d{6})-?(?<TYPE>[A-Z]*)\.cfm$/i;
 
 const ROMAN_VALUES: Record<string, number> = {

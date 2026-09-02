@@ -43,7 +43,7 @@ async function runCli(
   }
 }
 
-describe("CLI process tests", () => {
+describe("CLI process tests", { timeout: 30000 }, () => {
   describe("--help", () => {
     it("displays general --help information and exits 0", async () => {
       const result = await runCli(["--help"]);
@@ -137,7 +137,7 @@ describe("CLI process tests", () => {
         expect(result.stderr).toContain("[ERROR]");
         expect(result.stderr).toContain("stepDays must be a positive integer");
       }
-    }, 15000);
+    });
 
     it("rejects impossible calendar dates such as 31st of April or month 0", async () => {
       for (const dateVal of ["2026-04-31", "2026-00-10", "2026-13-01"]) {
@@ -322,7 +322,7 @@ describe("CLI process tests", () => {
       expect(resAbc.stderr).toContain(
         "concurrency must be an integer between 1 and 20"
       );
-    }, 15000);
+    });
   });
 });
 

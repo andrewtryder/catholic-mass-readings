@@ -189,6 +189,7 @@ export class USCCB {
       }
 
       let hitRetryableError = false;
+      let lastRetryableError: USCCBNetworkError | null = null;
       for (const type of types) {
         if (opts?.signal?.aborted) {
           opts.signal.throwIfAborted();
@@ -204,17 +205,25 @@ export class USCCB {
             if (err.status === 404) {
               continue;
             }
-            if (err.retryable && recovery < MAX_RETRIES - 1) {
-              hitRetryableError = true;
-              break;
+            if (err.retryable) {
+              lastRetryableError = err;
+              if (recovery < MAX_RETRIES - 1) {
+                hitRetryableError = true;
+                break;
+              }
+              continue;
             }
           }
           throw err;
         }
       }
-      if (!hitRetryableError) {
-        return null;
+      if (hitRetryableError) {
+        continue;
       }
+      if (lastRetryableError) {
+        throw lastRetryableError;
+      }
+      return null;
     }
     return null;
   }

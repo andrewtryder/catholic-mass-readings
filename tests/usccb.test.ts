@@ -286,6 +286,127 @@ describe("getMassFromDate", () => {
     expect(mass).toBeNull();
     expect(calls).toBe(2);
   });
+
+  it("continues past persistent 403 on speculative candidate during final recovery pass to succeed on later candidate", async () => {
+    const html = readFileSync(
+      join(dataDir, "mass-single-reading.html"),
+      "utf-8"
+    );
+    const requestedUrls: string[] = [];
+    let resets = 0;
+    const client: HttpClient = {
+      async get(url: string) {
+        requestedUrls.push(url);
+        if (url.includes("-Day.cfm")) {
+          // Speculative candidate consistently returns retryable 403
+          return { text: "", ok: false, status: 403, url };
+        }
+        if (url.includes("-YearA.cfm")) {
+          // Speculative candidate returns 404
+          return { text: "", ok: false, status: 404, url };
+        }
+        // DEFAULT candidate succeeds
+        return {
+          text: html,
+          ok: true,
+          status: 200,
+          url,
+        };
+      },
+      async head() {
+        return { text: "", ok: false, status: 404, url: "" };
+      },
+      reset() {
+        resets++;
+      },
+    };
+
+    const usccb = new USCCB(client);
+    const mass = await usccb.getMassFromDate(parseIsoDate("2025-08-06"), [
+      MassType.DAY,
+      MassType.YEARA,
+      MassType.DEFAULT,
+    ]);
+
+    expect(mass).not.toBeNull();
+    expect(mass?.type).toBe(MassType.DEFAULT);
+    expect(resets).toBe(1);
+    // Pass 0: tries DAY -> 403 (retryable), breaks to reset
+    // Pass 1: resets client, tries DAY -> 403 (continues), YEARA -> 404 (continues), DEFAULT -> 200
+    expect(requestedUrls).toEqual([
+      "https://bible.usccb.org/bible/readings/080625-Day.cfm",
+      "https://bible.usccb.org/bible/readings/080625-Day.cfm",
+      "https://bible.usccb.org/bible/readings/080625-YearA.cfm",
+      "https://bible.usccb.org/bible/readings/080625.cfm",
+    ]);
+  });
+
+  it("throws remembered retryable USCCBNetworkError when all candidates fail and does not return null", async () => {
+    const requestedUrls: string[] = [];
+    let resets = 0;
+    const client: HttpClient = {
+      async get(url: string) {
+        requestedUrls.push(url);
+        if (url.includes("-Day.cfm")) {
+          return { text: "", ok: false, status: 403, url };
+        }
+        return { text: "", ok: false, status: 404, url };
+      },
+      async head() {
+        return { text: "", ok: false, status: 404, url: "" };
+      },
+      reset() {
+        resets++;
+      },
+    };
+
+    const usccb = new USCCB(client);
+    let error: unknown = null;
+    try {
+      await usccb.getMassFromDate(parseIsoDate("2025-08-06"), [
+        MassType.DAY,
+        MassType.DEFAULT,
+      ]);
+    } catch (err) {
+      error = err;
+    }
+
+    expect(error).toBeInstanceOf(USCCBNetworkError);
+    const netErr = error as USCCBNetworkError;
+    expect(netErr.status).toBe(403);
+    expect(netErr.retryable).toBe(true);
+    expect(resets).toBe(1);
+    expect(requestedUrls).toEqual([
+      "https://bible.usccb.org/bible/readings/080625-Day.cfm",
+      "https://bible.usccb.org/bible/readings/080625-Day.cfm",
+      "https://bible.usccb.org/bible/readings/080625.cfm",
+    ]);
+  });
+
+  it("respects AbortSignal and aborts immediately without attempting recovery passes", async () => {
+    const controller = new AbortController();
+    let calls = 0;
+    const client: HttpClient = {
+      async get(url: string) {
+        calls++;
+        controller.abort();
+        return { text: "", ok: false, status: 403, url };
+      },
+      async head() {
+        return { text: "", ok: false, status: 404, url: "" };
+      },
+    };
+
+    const usccb = new USCCB(client);
+    await expect(
+      usccb.getMassFromDate(
+        parseIsoDate("2025-08-06"),
+        [MassType.DAY, MassType.DEFAULT],
+        { signal: controller.signal }
+      )
+    ).rejects.toThrow();
+    expect(calls).toBe(1);
+  });
 });
 
 describe("getMassFromUrl", () => {

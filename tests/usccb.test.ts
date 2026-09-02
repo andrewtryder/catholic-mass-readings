@@ -153,6 +153,7 @@ describe("USCCB static helpers", () => {
 describe("cleanText", () => {
   it("decodes html entities", () => {
     expect(cleanText("Hello &amp; World")).toBe("Hello & World");
+    expect(cleanText("&amp;lt;")).toBe("&lt;");
   });
 
   it("replaces nbsp", () => {

@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.6](https://github.com/andrewtryder/catholic-mass-readings/compare/v0.5.5...v0.5.6) (2026-09-02)
+
+
+### Bug Fixes
+
+* **security:** resolve CodeQL ReDoS and double-escaping alerts ([#80](https://github.com/andrewtryder/catholic-mass-readings/issues/80)) ([207644b](https://github.com/andrewtryder/catholic-mass-readings/commit/207644b8d74fca36f27b6731a3ff04495da56414))
+* **usccb:** continue after retryable candidate failures ([#76](https://github.com/andrewtryder/catholic-mass-readings/issues/76)) ([3d200b0](https://github.com/andrewtryder/catholic-mass-readings/commit/3d200b03e11f12c6b47d524236a57a48772d17ff))
+
 ## [0.5.5](https://github.com/andrewtryder/catholic-mass-readings/compare/v0.5.4...v0.5.5) (2026-08-07)
 
 

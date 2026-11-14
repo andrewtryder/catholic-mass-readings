@@ -38,7 +38,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node-version: [20, 22, 24]
+        node-version: [22, 24, 26]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Set up Node.js ${{ matrix.node-version }}
@@ -74,7 +74,7 @@ jobs:
     needs: build
     strategy:
       matrix:
-        node-version: [20, 24]
+        node-version: [22, 24, 26]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Set up Node.js
@@ -121,3 +121,16 @@ jobs:
           # CLI smoke test
           ./node_modules/.bin/catholic-mass-readings --help
           echo "CLI --help OK"
+
+          # Verify missing optional dependency (impit) falls back cleanly
+          TMPDIR_NO_OPT=$(mktemp -d)
+          cp "$GITHUB_WORKSPACE/$TARBALL" "$TMPDIR_NO_OPT/"
+          cd "$TMPDIR_NO_OPT"
+          echo '{"name":"smoke-no-opt","version":"1.0.0","type":"module","private":true}' > package.json
+          npm install --omit=optional --quiet "./$TARBALL"
+          node --input-type=module --eval "
+            import { createNodeHttpClient } from 'catholic-mass-readings';
+            const client = await createNodeHttpClient();
+            if (typeof client.get !== 'function') throw new Error('Fallback client invalid');
+            console.log('Optional dependency fallback OK');
+          "

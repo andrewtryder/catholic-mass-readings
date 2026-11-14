@@ -4,8 +4,13 @@
   "prHourlyLimit": 1,
   "prConcurrentLimit": 4,
   "dependencyDashboard": true,
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "labels": ["security"]
+  },
   "lockFileMaintenance": {
     "enabled": true,
+    "schedule": ["before 4am on monday"],
     "groupName": "lock file maintenance"
   },
   "packageRules": [
@@ -22,19 +27,38 @@
       "groupSlug": "github-actions-non-major"
     },
     {
+      "matchPackageNames": ["vitest", "@vitest/coverage-v8"],
       "matchUpdateTypes": ["major"],
+      "groupName": "vitest major updates",
+      "groupSlug": "vitest-major"
+    },
+    {
+      "matchPackageNames": ["node", "actions/node-versions", "cimg/node"],
+      "matchUpdateTypes": ["major"],
+      "groupName": "node runtime major updates",
+      "groupSlug": "node-major"
+    },
+    {
+      "matchUpdateTypes": ["major"],
+      "excludePackageNames": [
+        "vitest",
+        "@vitest/coverage-v8",
+        "node",
+        "actions/node-versions",
+        "cimg/node"
+      ],
       "groupName": "major dependency updates",
       "groupSlug": "major-dependencies"
     },
     {
       "matchPackageNames": ["@types/node"],
-      "allowedVersions": "20.x",
+      "allowedVersions": "22.x",
       "groupName": "minimum Node compatibility types"
     },
     {
       "matchPackageNames": ["commander"],
       "allowedVersions": "<15.0.0",
-      "groupName": "Node >= 20 compatible commander"
+      "groupName": "Node >= 22 compatible commander"
     },
     {
       "matchPackageNames": [
@@ -42,22 +66,22 @@
         "@commitlint/config-conventional"
       ],
       "allowedVersions": "<21.0.0",
-      "groupName": "Node >= 20 compatible commitlint"
+      "groupName": "Node >= 22 compatible commitlint"
     },
     {
       "matchPackageNames": ["lint-staged"],
       "allowedVersions": "<17.0.0",
-      "groupName": "Node >= 20 compatible lint-staged"
+      "groupName": "Node >= 22 compatible lint-staged"
     },
     {
       "matchPackageNames": ["cimg/node"],
-      "allowedVersions": "20.x",
-      "groupName": "Node >= 20 canary Docker image"
+      "allowedVersions": "22.x",
+      "groupName": "Node >= 22 canary Docker image"
     },
     {
       "matchPackageNames": ["typescript"],
       "allowedVersions": "<6.1.0",
-      "groupName": "Node >= 20 & tooling compatible TypeScript"
+      "groupName": "tooling compatible TypeScript"
     }
   ]
 }

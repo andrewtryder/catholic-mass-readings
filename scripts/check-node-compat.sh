@@ -24,17 +24,17 @@ if command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/n
   fi
 fi
 
-# 2. Determine runtime (Node 20 vs Docker node:20-bookworm-slim)
+# 2. Determine runtime (Node 22 vs Docker node:22-bookworm-slim)
 NODE_VER=""
 if command -v node >/dev/null 2>&1; then
   NODE_VER=$(node -v 2>/dev/null || true)
 fi
 
-if [[ "$NODE_VER" =~ ^v?20\. ]]; then
-  echo "Found Node.js 20 runtime: $NODE_VER"
+if [[ "$NODE_VER" =~ ^v?22\. ]]; then
+  echo "Found Node.js 22 runtime: $NODE_VER"
   echo "Node version: $(node -v), npm version: $(npm -v)"
-elif [ "${IN_NODE20_CONTAINER:-0}" = "1" ]; then
-  echo "Error: Running inside container but node version ($NODE_VER) is not Node 20." >&2
+elif [ "${IN_NODE_COMPAT_CONTAINER:-0}" = "1" ]; then
+  echo "Error: Running inside container but node version ($NODE_VER) is not Node 22." >&2
   exit 1
 else
   # Check if Docker is available
@@ -48,15 +48,15 @@ else
   fi
 
   if [ -n "$DOCKER_CMD" ]; then
-    echo "Current Node runtime ($NODE_VER) is not Node 20. Running check in isolated node:20-bookworm-slim container via Docker..."
+    echo "Current Node runtime ($NODE_VER) is not Node 22. Running check in isolated node:22-bookworm-slim container via Docker..."
     REPO_DIR=$(pwd)
     exec $DOCKER_CMD run --rm \
       -v "$REPO_DIR:/workspace:ro" \
       -w /workspace \
-      -e IN_NODE20_CONTAINER=1 \
-      node:20-bookworm-slim bash scripts/check-node20.sh
+      -e IN_NODE_COMPAT_CONTAINER=1 \
+      node:22-bookworm-slim bash scripts/check-node-compat.sh
   else
-    echo "Error: Neither a Node 20 runtime (current: ${NODE_VER:-none}) nor a working Docker engine is available to run the Node 20 compatibility check." >&2
+    echo "Error: Neither a Node 22 runtime (current: ${NODE_VER:-none}) nor a working Docker engine is available to run the Node 22 compatibility check." >&2
     exit 1
   fi
 fi
@@ -120,7 +120,7 @@ fi
 echo "Successfully packed: $TARBALL_NAME"
 
 # 5. Test the packed package as a consumer
-echo "Testing packed package in a clean consumer project under Node 20..."
+echo "Testing packed package in a clean consumer project under Node 22..."
 CONSUMER_DIR="$TMP_DIR/consumer"
 mkdir -p "$CONSUMER_DIR"
 cd "$CONSUMER_DIR"
@@ -214,4 +214,4 @@ if (!mass || mass.title !== "Daily Mass Readings" || mass.sections.length !== 2)
 console.log("Offline parser test verified successfully: " + mass.title);
 '
 
-echo "Node.js 20 compatibility check completed successfully!"
+echo "Node.js 22 compatibility check completed successfully!"

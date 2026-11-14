@@ -10,11 +10,11 @@ export default defineConfig({
       include: ["src/**/*.ts"],
       exclude: ["**/*.test.ts", "**/*.d.ts", "src/cli.ts"],
       thresholds: {
-        lines: 75,
-        functions: 75,
+        lines: 85,
+        functions: 85,
         // Vitest 4 AST-aware V8 coverage counts branches more strictly than v3.
-        branches: 60,
-        statements: 75,
+        branches: 75,
+        statements: 85,
       },
     },
   },

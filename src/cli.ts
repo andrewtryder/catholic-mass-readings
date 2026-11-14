@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 
+import { realpathSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { Command, Option } from "commander";
 
 import {
@@ -13,7 +15,12 @@ import {
 } from "./models.js";
 import { createNodeHttpClient } from "./http-node.js";
 import { USCCB } from "./usccb.js";
-import { addDays, parseIsoDate, todayInNewYork } from "./utils.js";
+import {
+  addDays,
+  formatIsoDate,
+  parseIsoDate,
+  todayInNewYork,
+} from "./utils.js";
 import { USCCBArgumentError } from "./errors.js";
 
 const DATE_FMT = "YYYY-MM-DD";
@@ -79,13 +86,6 @@ export async function mapWithConcurrency<T, R>(
   );
 
   return results;
-}
-
-function formatIsoDate(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
 }
 
 function parseDateOption(value: string): Date {
@@ -208,9 +208,33 @@ program
   .action(async (options: { date: string }) => {
     const date = parseDateOption(options.date);
     const usccb = new USCCB(await createNodeHttpClient());
-    const massTypes = await usccb.getMassTypes(date);
-    for (const massType of massTypes) {
+    const result = await usccb.getMassTypesDetailed(date);
+    for (const massType of result.types) {
       console.log(REVERSE_MASS_TYPE.get(massType) ?? massType);
+    }
+    if (!result.complete) {
+      if (result.types.length === 0) {
+        const firstError = result.failedTypes
+          .map((t) => result.errors[t])
+          .find((e) => e !== undefined);
+        if (firstError) {
+          throw firstError;
+        }
+      }
+      const failedNames = result.failedTypes.map(
+        (t) => REVERSE_MASS_TYPE.get(t) ?? t
+      );
+      logger.error(
+        `Incomplete mass type probe for ${options.date}: failed to check ${failedNames.join(", ")}`
+      );
+      for (const failedType of result.failedTypes) {
+        const err = result.errors[failedType];
+        if (err) {
+          const name = REVERSE_MASS_TYPE.get(failedType) ?? failedType;
+          logger.error(`Failed probing ${name}: ${err.message}`);
+        }
+      }
+      process.exitCode = 1;
     }
   });
 
@@ -377,7 +401,19 @@ async function printMassRange(
   }
 }
 
-program.parseAsync(process.argv).catch((error: unknown) => {
-  logger.error(error);
-  process.exitCode = 1;
-});
+function isMainModule(): boolean {
+  const entry = process.argv[1];
+  if (!entry) return false;
+  try {
+    return realpathSync(entry) === realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
+}
+
+if (isMainModule()) {
+  program.parseAsync(process.argv).catch((error: unknown) => {
+    logger.error(error);
+    process.exitCode = 1;
+  });
+}

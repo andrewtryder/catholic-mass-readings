@@ -51,7 +51,7 @@ API docs deploy from the `docs` job in `release-please.yml` when a release is cr
 The `main` ruleset requires pull requests and these status checks:
 
 - `lint-and-format`
-- `test (20)`, `test (22)`, `test (24)`
+- `test (22)`, `test (24)`, `test (26)`
 - `build`
 
 Optional: add `Validate PR title` from `semantic-pull-request.yml`.
@@ -87,9 +87,9 @@ gh api -X PUT repos/andrewtryder/catholic-mass-readings/rulesets/RULESET_ID --in
         "required_status_checks": [
           { "context": "lint-and-format" },
           { "context": "build" },
-          { "context": "test (20)" },
           { "context": "test (22)" },
-          { "context": "test (24)" }
+          { "context": "test (24)" },
+          { "context": "test (26)" }
         ]
       }
     }

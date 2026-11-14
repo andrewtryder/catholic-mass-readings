@@ -13,6 +13,11 @@ const mockErrorHelper = join(testDir, "helpers", "mock-net-error.ts");
 const mockSuccessHelper = join(testDir, "helpers", "mock-net-success.ts");
 const mockCircularHelper = join(testDir, "helpers", "mock-circular-error.ts");
 const mockPartialHelper = join(testDir, "helpers", "mock-partial.ts");
+const mockPartialMassTypesHelper = join(
+  testDir,
+  "helpers",
+  "mock-partial-mass-types.ts"
+);
 
 async function runCli(
   args: string[],
@@ -166,6 +171,20 @@ describe("CLI process tests", { timeout: 30000 }, () => {
       expect(result.exitCode).toBe(1);
       expect(result.stderr).toContain("[ERROR]");
       expect(result.stderr).toContain("fetch failed: network error");
+    });
+
+    it("reports incomplete results and exits 1 when get-mass-types has partial probe failures", async () => {
+      const result = await runCli(["get-mass-types", "--date", "2025-12-25"], {
+        importHelper: mockPartialMassTypesHelper,
+      });
+      expect(result.exitCode).toBe(1);
+      expect(result.stdout.trim()).toBe("DAY");
+      expect(result.stderr).toContain("[ERROR]");
+      expect(result.stderr).toContain(
+        "Incomplete mass type probe for 2025-12-25"
+      );
+      expect(result.stderr).toContain("VIGIL");
+      expect(result.stderr).toContain("HTTP 503");
     });
 
     it("handles network failure across get-mass-range and exits with code 1", async () => {

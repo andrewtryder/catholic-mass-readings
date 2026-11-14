@@ -1,39 +1,23 @@
-import * as cheerio from "cheerio";
-import type { Element } from "domhandler";
-
-import { OR_PATTERN } from "./constants.js";
 import type { HttpClient, HttpRequestOptions, HttpResponse } from "./http.js";
 import { createFetchClient } from "./http.js";
-import {
-  USCCBArgumentError,
-  USCCBError,
-  USCCBNetworkError,
-  USCCBParseError,
-} from "./errors.js";
-
-const MAX_RETRIES = 2;
-import { isObolusChallenge } from "./obolus.js";
-import {
-  MassType,
-  SectionType,
-  type Mass,
-  type Reading,
-  type Section,
-  type Verse,
-  massTypeToUrl,
-  parseMassType,
-  readingWithText,
-  sectionAddAlternative,
-  sectionTypeFromHeader,
-} from "./models.js";
+import { USCCBArgumentError, USCCBError, USCCBNetworkError } from "./errors.js";
+import { MassType, type Mass, massTypeToUrl, parseMassType } from "./models.js";
+import { cleanText, parseMassHtml } from "./parser.js";
 import {
   addDays,
   assertUsccbReadingsUrl,
   assertValidDate,
-  getBookFromVerse,
+  formatIsoDate,
   parseUrl,
   todayInNewYork,
 } from "./utils.js";
+
+export { cleanText };
+
+const MAX_RETRIES = 2;
+const MASS_TYPE_PROBE_CONCURRENCY = 4;
+const RETRYABLE_STATUS_CODES = new Set([403, 429, 502, 503, 504]);
+const HEAD_UNSUPPORTED_STATUS_CODES = new Set([405, 501]);
 
 /** Default mass types tried in order when resolving a date without an explicit type. */
 export const DEFAULT_MASS_TYPES: MassType[] = [
@@ -43,6 +27,18 @@ export const DEFAULT_MASS_TYPES: MassType[] = [
   MassType.YEARC,
   MassType.DEFAULT,
 ];
+
+/** Detailed result of probing available {@link MassType} variants for a date. */
+export interface MassTypesResult {
+  /** Mass types that were confirmed available (HTTP 2xx), sorted alphabetically. */
+  types: MassType[];
+  /** True when every MassType probe returned a definitive 2xx or 404 response. */
+  complete: boolean;
+  /** Mass types whose probes failed due to network errors or non-404 HTTP errors. */
+  failedTypes: MassType[];
+  /** Error details keyed by failed MassType. */
+  errors: Partial<Record<MassType, USCCBError>>;
+}
 
 /**
  * Client for fetching and parsing USCCB daily mass readings.
@@ -239,12 +235,23 @@ export class USCCB {
 
   /**
    * Fetch and parse mass from any trusted URL without USCCB origin and path enforcement.
-   * Requires explicit opt-in when fetching from sources outside `https://bible.usccb.org`.
+   *
+   * @remarks
+   * **Security Warning:** This method bypasses the `https://bible.usccb.org/bible/readings/`
+   * origin allowlist. Do NOT pass untrusted user-supplied URLs directly to this method, as
+   * doing so can expose your application to Server-Side Request Forgery (SSRF). Use
+   * {@link getMassFromUrl} for untrusted USCCB URLs, or validate the URL host against your
+   * own allowlist before calling this method.
    */
   async getMassFromTrustedUrl(
     url: string,
     options?: HttpRequestOptions
   ): Promise<Mass | null> {
+    if (hasControlOrWhitespace(url)) {
+      throw new USCCBArgumentError(
+        "URL must not contain whitespace or control characters"
+      );
+    }
     let validUrl: URL;
     try {
       validUrl = new URL(url);
@@ -271,68 +278,111 @@ export class USCCB {
     return this.fetchMass(url, date, type, options);
   }
 
-  /** List mass types available for a date (via HEAD requests). */
+  /**
+   * Probe available mass types for a date with completeness metadata.
+   * Falls back to bounded GET requests if HEAD is rejected (HTTP 405 or 501).
+   */
+  async getMassTypesDetailed(
+    date: Date,
+    options?: HttpRequestOptions
+  ): Promise<MassTypesResult> {
+    assertValidDate(date, "date");
+    const allTypes = Object.values(MassType);
+    const results = await mapLimited(
+      allTypes,
+      MASS_TYPE_PROBE_CONCURRENCY,
+      async (
+        type
+      ): Promise<{
+        type: MassType;
+        response?: HttpResponse;
+        error?: unknown;
+      }> => {
+        if (options?.signal?.aborted) {
+          options.signal.throwIfAborted();
+        }
+        const url = massTypeToUrl(type, date);
+        try {
+          let response = await this.client.head(url, options);
+          if (HEAD_UNSUPPORTED_STATUS_CODES.has(response.status)) {
+            response = await this.client.get(url, options);
+          }
+          return { type, response };
+        } catch (error) {
+          return { type, error };
+        }
+      }
+    );
+
+    const types: MassType[] = [];
+    const failedTypes: MassType[] = [];
+    const errors: Partial<Record<MassType, USCCBError>> = {};
+
+    for (const item of results) {
+      if (item.response) {
+        if (item.response.ok) {
+          types.push(item.type);
+        } else if (item.response.status !== 404) {
+          failedTypes.push(item.type);
+          const retryable = RETRYABLE_STATUS_CODES.has(item.response.status);
+          errors[item.type] = new USCCBNetworkError(
+            `Failed to probe mass type ${item.type}: HTTP ${item.response.status}`,
+            {
+              status: item.response.status,
+              url: item.response.url || massTypeToUrl(item.type, date),
+              retryable,
+            }
+          );
+        }
+      } else if (item.error !== undefined) {
+        if (options?.signal?.aborted) {
+          throw item.error;
+        }
+        failedTypes.push(item.type);
+        if (item.error instanceof USCCBError) {
+          errors[item.type] = item.error;
+        } else {
+          const message =
+            item.error instanceof Error
+              ? item.error.message
+              : String(item.error);
+          errors[item.type] = new USCCBNetworkError(
+            `Failed to determine available Mass types: ${message}`,
+            { cause: item.error, retryable: false }
+          );
+        }
+      }
+    }
+
+    types.sort((a, b) => a.localeCompare(b));
+    return {
+      types,
+      complete: failedTypes.length === 0,
+      failedTypes,
+      errors,
+    };
+  }
+
+  /** List mass types available for a date (via HEAD requests with bounded GET fallback). */
   async getMassTypes(
     date: Date,
     options?: HttpRequestOptions
   ): Promise<MassType[]> {
-    assertValidDate(date, "date");
-    const checks = await Promise.allSettled(
-      Object.values(MassType).map(async (type) => ({
-        type,
-        response: await this.client.head(massTypeToUrl(type, date), options),
-      }))
-    );
-
-    type FulfilledCheck = PromiseFulfilledResult<{
-      type: MassType;
-      response: HttpResponse;
-    }>;
-
-    const successful = checks
-      .filter(
-        (item): item is FulfilledCheck =>
-          item.status === "fulfilled" && item.value.response.ok
-      )
-      .map((item) => item.value.type);
-
-    if (successful.length > 0) {
-      return successful.sort((a, b) => a.localeCompare(b));
+    const detailed = await this.getMassTypesDetailed(date, options);
+    if (detailed.types.length > 0 || detailed.complete) {
+      return detailed.types;
     }
 
-    const fulfilled = checks.filter(
-      (item): item is FulfilledCheck => item.status === "fulfilled"
-    );
+    const firstError = detailed.failedTypes
+      .map((t) => detailed.errors[t])
+      .find((e): e is USCCBError => e !== undefined);
 
-    const onlyNotFound =
-      fulfilled.length === checks.length &&
-      fulfilled.every((item) => item.value.response.status === 404);
-
-    if (onlyNotFound) {
-      return [];
-    }
-
-    const retryable = fulfilled.some((item) =>
-      [403, 429, 502, 503, 504].includes(item.value.response.status)
-    );
-
-    const firstRejected = checks.find(
-      (item): item is PromiseRejectedResult => item.status === "rejected"
-    );
-    if (firstRejected) {
-      const reason = firstRejected.reason;
-      if (reason instanceof USCCBError) {
-        throw reason;
-      }
-      const message = reason instanceof Error ? reason.message : String(reason);
-      throw new USCCBNetworkError(
-        `Failed to determine available Mass types: ${message}`,
-        { cause: reason, retryable }
-      );
+    if (firstError) {
+      throw firstError;
     }
 
     throw new USCCBNetworkError("Failed to determine available Mass types", {
-      retryable,
+      retryable: false,
     });
   }
 
@@ -356,7 +406,7 @@ export class USCCB {
       );
     }
     if (!response.ok) {
-      const retryable = [403, 429, 502, 503, 504].includes(response.status);
+      const retryable = RETRYABLE_STATUS_CODES.has(response.status);
       throw new USCCBNetworkError(
         `Failed to fetch mass from ${url}: ${response.status}`,
         { status: response.status, url, retryable }
@@ -375,219 +425,39 @@ export class USCCB {
     date: Date | null,
     type: MassType | string | null
   ): Mass {
-    if (isObolusChallenge(html) || html.includes("Access Denied")) {
-      throw new USCCBParseError(
-        "USCCB returned a block or challenge page instead of readings content"
-      );
-    }
-
-    const $ = cheerio.load(html);
-    const title = $("title").text().trim().split("|")[0].trim();
-    if (!title) {
-      throw new USCCBParseError("USCCB page did not contain a title");
-    }
-
-    const sections = this.getSections($);
-    if (sections.length === 0) {
-      throw new USCCBParseError(
-        "USCCB page contained no recognizable reading sections"
-      );
-    }
-
-    const hasReadingContent = sections.some((section) =>
-      section.readings.some(
-        (reading) =>
-          reading.text.trim().length > 0 ||
-          reading.verses.some(
-            (v) => v.text.trim().length > 0 || v.link.trim().length > 0
-          )
-      )
-    );
-    if (!hasReadingContent) {
-      throw new USCCBParseError(
-        "USCCB page contained no reading text or citations"
-      );
-    }
-
-    return { date, type, url, title, sections };
-  }
-
-  private getSections($: cheerio.CheerioAPI): Section[] {
-    const sections: Section[] = [];
-    let prevExpectsChildren = false;
-
-    for (const container of $(".container").toArray()) {
-      const name = $(container).find(".name").first();
-      const address = $(container).find(".address").first();
-      if (!name.length || !address.length) continue;
-
-      const verses = this.getVerses($, address);
-      if (verses.length === 0) continue;
-
-      const header = name.text().trim();
-      const sectionType = sectionTypeFromHeader(header);
-
-      let section: Section | null = null;
-      let expectsChildren = false;
-      for (const reading of this.getReadings($, container, verses)) {
-        if (section === null) {
-          const orMatch = OR_PATTERN.exec(reading.text);
-          if (orMatch) {
-            expectsChildren = true;
-            section = {
-              type: sectionType,
-              header,
-              readings: [
-                readingWithText(
-                  reading,
-                  reading.text.slice(0, orMatch.index).trim()
-                ),
-              ],
-            };
-          } else {
-            expectsChildren = false;
-            section = { type: sectionType, header, readings: [reading] };
-          }
-        } else {
-          section = sectionAddAlternative(section, reading);
-        }
-      }
-
-      if (!section) continue;
-
-      if (
-        sections.length > 0 &&
-        ((sectionType === SectionType.UNKNOWN && prevExpectsChildren) ||
-          sectionType === SectionType.ALTERNATIVE)
-      ) {
-        sections[sections.length - 1] = sectionAddAlternative(
-          sections[sections.length - 1],
-          section.readings
-        );
-        prevExpectsChildren = false;
-        continue;
-      }
-
-      prevExpectsChildren = expectsChildren;
-      sections.push(section);
-    }
-
-    return sections;
-  }
-
-  private getVerses(
-    $: cheerio.CheerioAPI,
-    parent: cheerio.Cheerio<Element>
-  ): Verse[] {
-    return parent
-      .find("a[href]")
-      .toArray()
-      .map((anchor) => this.createVerse($, anchor));
-  }
-
-  private createVerse($: cheerio.CheerioAPI, anchor: Element): Verse {
-    const text = cleanText($(anchor).text().trim());
-    const link = ($(anchor).attr("href") ?? "").trim();
-    const bookDict = getBookFromVerse(link, text);
-    return { text, link, book: bookDict?.name ?? null };
-  }
-
-  private *getReadings(
-    $: cheerio.CheerioAPI,
-    container: Element,
-    verses: Verse[]
-  ): Generator<Reading> {
-    const contentBody = $(container).find(".content-body").first();
-    let empty = true;
-
-    for (const [currentVerses, lines] of this.getRawReadings(
-      $,
-      contentBody,
-      verses
-    )) {
-      const text = cleanText(lines.join("\n")).trim();
-      if (text) {
-        yield { verses: currentVerses, text };
-        empty = false;
-      }
-    }
-
-    if (empty) {
-      yield {
-        verses,
-        text: cleanText(getElementText($, contentBody.get(0)!)).trim(),
-      };
-    }
-  }
-
-  private *getRawReadings(
-    $: cheerio.CheerioAPI,
-    contentBody: cheerio.Cheerio<Element>,
-    initialVerses: Verse[]
-  ): Generator<[Verse[], string[]]> {
-    let lines: string[] = [];
-    let verses = [...initialVerses];
-
-    for (const paragraph of contentBody.find("p").toArray()) {
-      const txt = getElementText($, paragraph).trim();
-      if (OR_PATTERN.test(txt.trim())) {
-        yield [verses, lines];
-        lines = [];
-        verses = [];
-        continue;
-      }
-
-      const currVerses = this.getVerses($, $(paragraph));
-      if (currVerses.length > 0) {
-        yield [verses, lines];
-        lines = [];
-        verses = currVerses;
-        continue;
-      }
-
-      lines.push(txt);
-    }
-
-    yield [verses, lines];
+    return parseMassHtml(html, url, date, type);
   }
 }
 
-function getElementText($: cheerio.CheerioAPI, element: Element): string {
-  const clone = $(element).clone();
-  clone.find("br").replaceWith("\n");
-  return clone.text();
+function hasControlOrWhitespace(value: string): boolean {
+  if (/\s/.test(value)) return true;
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i);
+    if (code <= 0x1f || code === 0x7f) {
+      return true;
+    }
+  }
+  return false;
 }
 
-/** Normalize whitespace and HTML entities in reading text extracted from USCCB pages. */
-export function cleanText(input: string): string {
-  let text = input
-    .replace(/\u00a0/g, " ")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&amp;/g, "&");
+async function mapLimited<T, R>(
+  items: readonly T[],
+  limit: number,
+  workerFn: (item: T) => Promise<R>
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
 
-  text = text
-    .replace(/\r\n?/g, "\n")
-    .replace(/[^\S\n]+/g, " ")
-    .replace(/\n{3,}/g, "\n\n");
-  text = text.replace(/\.([A-Z])/g, ". $1");
-  text = text.replace(/,([A-Z])/g, ", $1");
-  text = text.replace(/;([A-Z])/g, "; $1");
-  text = text.replace(/\n[^\S\n]*\n/g, "\n\n");
-  text = text.replace(/([.!?])[^\S\n]*\n([A-Z])/g, "$1\n\n$2");
+  async function worker(): Promise<void> {
+    while (true) {
+      const index = nextIndex++;
+      if (index >= items.length) return;
+      results[index] = await workerFn(items[index]);
+    }
+  }
 
-  const lines = text
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
-  return lines.join("\n\n").trim();
-}
-
-function formatIsoDate(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, () => worker())
+  );
+  return results;
 }

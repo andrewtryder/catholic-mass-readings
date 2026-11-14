@@ -28,6 +28,10 @@ class ObolusStore {
     this.cookies.set(origin, cookie);
   }
 
+  clearCookie(origin: string): void {
+    this.cookies.delete(origin);
+  }
+
   getSolver(origin: string): Promise<void> | null {
     return this.solvers.get(origin) ?? null;
   }
@@ -170,7 +174,13 @@ async function fetchGetWithObolus(
       return createTextResponse(response, text);
     }
 
-    await solveChallengeAndCache(text, store, origin, init?.signal);
+    await solveChallengeAndCache(
+      text,
+      store,
+      origin,
+      init?.signal,
+      proofCookie
+    );
 
     if (init?.signal?.aborted) {
       init.signal.throwIfAborted();
@@ -239,7 +249,13 @@ async function fetchHeadWithObolus(
       return response;
     }
 
-    await solveChallengeAndCache(challengeBody, store, origin, init?.signal);
+    await solveChallengeAndCache(
+      challengeBody,
+      store,
+      origin,
+      init?.signal,
+      proofCookie
+    );
 
     if (init?.signal?.aborted) {
       init.signal.throwIfAborted();
@@ -285,19 +301,24 @@ async function solveChallengeAndCache(
   challengeHtml: string,
   store: ObolusStore,
   origin: string,
-  signal?: AbortSignal | null
+  signal?: AbortSignal | null,
+  staleCookie: string | null = null
 ): Promise<void> {
-  if (store.getCookie(origin)) {
+  const currentCookie = store.getCookie(origin);
+  if (currentCookie !== null && currentCookie !== staleCookie) {
     return;
   }
   if (signal?.aborted) {
     signal.throwIfAborted();
   }
+  if (currentCookie !== null && currentCookie === staleCookie) {
+    store.clearCookie(origin);
+  }
 
   let inFlight = store.getSolver(origin);
   if (!inFlight) {
     inFlight = (async () => {
-      const cookie = await solveObolusChallenge(challengeHtml, { signal });
+      const cookie = await solveObolusChallenge(challengeHtml);
       store.setCookie(origin, cookie);
     })().finally(() => {
       store.clearSolver(origin);
@@ -305,7 +326,33 @@ async function solveChallengeAndCache(
     store.setSolver(origin, inFlight);
   }
 
-  await inFlight;
+  await raceWithAbort(inFlight, signal);
+}
+
+async function raceWithAbort(
+  promise: Promise<void>,
+  signal?: AbortSignal | null
+): Promise<void> {
+  if (!signal) {
+    return promise;
+  }
+  if (signal.aborted) {
+    signal.throwIfAborted();
+  }
+  let onAbort: (() => void) | undefined;
+  const abortPromise = new Promise<never>((_resolve, reject) => {
+    onAbort = () => {
+      reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+  try {
+    await Promise.race([promise, abortPromise]);
+  } finally {
+    if (onAbort) {
+      signal.removeEventListener("abort", onAbort);
+    }
+  }
 }
 
 function createTextResponse(

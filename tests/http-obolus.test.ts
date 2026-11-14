@@ -382,4 +382,66 @@ describe("wrapFetchWithObolus", () => {
       expect(init.redirect).toBe("manual");
     }
   });
+
+  it("recovers from an expired proof cookie by solving the new challenge on the first retry", async () => {
+    let callCount = 0;
+    const fetchImpl = vi.fn(
+      async (_input: string | URL | Request, init?: RequestInit) => {
+        callCount++;
+        const cookie = new Headers(init?.headers).get("Cookie") ?? "";
+        // Call 1: no cookie -> challenge
+        if (callCount === 1) return mockResponse(403, challengeHtml);
+        // Call 2: first solved cookie -> success
+        if (callCount === 2) {
+          expect(cookie).toContain("X_Obolus_Proof=");
+          return mockResponse(200, successHtml);
+        }
+        // Call 3: cached cookie has now expired -> server returns challenge again
+        if (callCount === 3) return mockResponse(403, challengeHtml);
+        // Call 4: should immediately solve fresh challenge without reusing stale cookie
+        return mockResponse(200, successHtml);
+      }
+    );
+
+    const wrapped = wrapFetchWithObolus(fetchImpl);
+    const r1 = await wrapped(
+      "https://bible.usccb.org/bible/readings/080625.cfm"
+    );
+    expect(r1.ok).toBe(true);
+    const r2 = await wrapped(
+      "https://bible.usccb.org/bible/readings/080625.cfm"
+    );
+    expect(r2.ok).toBe(true);
+    expect(callCount).toBe(4);
+  });
+
+  it("handles concurrent requests when one caller aborts without aborting the shared solver for other callers", async () => {
+    let solveCalls = 0;
+    const fetchImpl = vi.fn(
+      async (_input: string | URL | Request, init?: RequestInit) => {
+        const cookie = new Headers(init?.headers).get("Cookie") ?? "";
+        if (!cookie.includes("X_Obolus_Proof=")) {
+          solveCalls++;
+          return mockResponse(403, challengeHtml);
+        }
+        return mockResponse(200, successHtml);
+      }
+    );
+
+    const wrapped = wrapFetchWithObolus(fetchImpl);
+    const controller = new AbortController();
+
+    const p1 = wrapped("https://bible.usccb.org/bible/readings/080625.cfm", {
+      signal: controller.signal,
+    });
+    const p2 = wrapped("https://bible.usccb.org/bible/readings/080626.cfm");
+
+    // Abort only the first caller immediately
+    controller.abort(new Error("caller 1 aborted"));
+
+    await expect(p1).rejects.toThrow("caller 1 aborted");
+    const res2 = await p2;
+    expect(res2.ok).toBe(true);
+    expect(solveCalls).toBe(2);
+  });
 });

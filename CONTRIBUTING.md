@@ -4,7 +4,7 @@ Thanks for your interest in **catholic-mass-readings**!
 
 ## Development setup
 
-Requires Node 24 for local development (see `.nvmrc`). The published package supports Node `>=20`.
+Requires Node 24 for local development (see `.nvmrc`). The published package supports Node `>=22`.
 
 ```bash
 git clone https://github.com/andrewtryder/catholic-mass-readings.git

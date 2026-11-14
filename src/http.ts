@@ -1,4 +1,9 @@
-import { USCCBArgumentError, USCCBError, USCCBNetworkError } from "./errors.js";
+import {
+  USCCBArgumentError,
+  USCCBBotChallengeError,
+  USCCBError,
+  USCCBNetworkError,
+} from "./errors.js";
 import {
   type FetchLike,
   type FetchResult,
@@ -11,6 +16,12 @@ export { readBoundedText };
 export const DEFAULT_TIMEOUT_MS = 15_000;
 export const MAX_RESPONSE_SIZE_BYTES = 3 * 1024 * 1024; // 3 MB
 export const MAX_REDIRECTS = 5;
+export const DEFAULT_MAX_RETRIES = 2;
+export const DEFAULT_RETRY_BASE_DELAY_MS = 250;
+export const DEFAULT_RETRY_MAX_DELAY_MS = 10_000;
+export const DEFAULT_MAX_TOTAL_RETRY_DELAY_MS = 30_000;
+
+const RETRYABLE_HTTP_STATUSES = new Set([429, 502, 503, 504]);
 
 /** HTTP response returned by {@link HttpClient}. */
 export interface HttpResponse {
@@ -56,6 +67,16 @@ export type CreateFetchClientOptions = {
   maxResponseSizeBytes?: number;
   /** Maximum number of redirects to follow (default: 5). */
   maxRedirects?: number;
+  /** Maximum number of retries on transient failures (default: 2). */
+  maxRetries?: number;
+  /** Initial backoff delay in milliseconds (default: 250). */
+  retryBaseDelayMs?: number;
+  /** Maximum delay for a single retry attempt in milliseconds (default: 10_000). */
+  retryMaxDelayMs?: number;
+  /** Maximum cumulative retry wait time per request in milliseconds (default: 30_000). */
+  maxTotalRetryDelayMs?: number;
+  /** Optional random source in [0, 1) for jitter calculation (useful in tests). */
+  random?: () => number;
 };
 
 /** Combine a timeout duration in milliseconds and an optional caller AbortSignal. */
@@ -110,6 +131,85 @@ function isHtmlOrXmlContentType(contentType: string): boolean {
   );
 }
 
+function assertNonNegativeInteger(
+  value: number | undefined,
+  name: string
+): void {
+  if (
+    value !== undefined &&
+    (!Number.isFinite(value) || value < 0 || !Number.isInteger(value))
+  ) {
+    throw new USCCBArgumentError(
+      `${name} must be a non-negative integer; received '${value}'`
+    );
+  }
+}
+
+/** Parse an HTTP `Retry-After` header into milliseconds, or `null` if invalid. */
+export function parseRetryAfterMs(
+  headerValue: string | null | undefined,
+  nowMs: number = Date.now()
+): number | null {
+  if (!headerValue) return null;
+  const trimmed = headerValue.trim();
+  if (!trimmed) return null;
+
+  if (/^\d+$/.test(trimmed)) {
+    const seconds = Number.parseInt(trimmed, 10);
+    return Number.isFinite(seconds) ? seconds * 1000 : null;
+  }
+
+  const parsedDate = Date.parse(trimmed);
+  if (Number.isNaN(parsedDate)) {
+    return null;
+  }
+  return Math.max(0, parsedDate - nowMs);
+}
+
+function sanitizeUrlForLog(rawUrl: string): string {
+  try {
+    const parsed = new URL(rawUrl);
+    parsed.username = "";
+    parsed.password = "";
+    return parsed.href;
+  } catch {
+    return rawUrl;
+  }
+}
+
+async function sleepWithSignal(
+  ms: number,
+  signal?: AbortSignal
+): Promise<void> {
+  if (ms <= 0) {
+    if (signal?.aborted) signal.throwIfAborted();
+    return;
+  }
+  if (signal?.aborted) {
+    signal.throwIfAborted();
+  }
+  await new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(signal?.reason ?? new DOMException("Aborted", "AbortError"));
+    };
+
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+function isAbortOrTimeoutError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    (error.name === "AbortError" || error.name === "TimeoutError")
+  );
+}
+
 /**
  * Create an {@link HttpClient} backed by the platform `fetch` API (or a compatible implementation).
  */
@@ -117,36 +217,19 @@ export function createFetchClient(
   fetchImpl: FetchLike = fetch as unknown as FetchLike,
   options: CreateFetchClientOptions = {}
 ): HttpClient {
-  if (
-    options.timeoutMs !== undefined &&
-    (!Number.isFinite(options.timeoutMs) ||
-      options.timeoutMs < 0 ||
-      !Number.isInteger(options.timeoutMs))
-  ) {
-    throw new USCCBArgumentError(
-      `timeoutMs must be a non-negative integer; received '${options.timeoutMs}'`
-    );
-  }
-  if (
-    options.maxResponseSizeBytes !== undefined &&
-    (!Number.isFinite(options.maxResponseSizeBytes) ||
-      options.maxResponseSizeBytes < 0 ||
-      !Number.isInteger(options.maxResponseSizeBytes))
-  ) {
-    throw new USCCBArgumentError(
-      `maxResponseSizeBytes must be a non-negative integer; received '${options.maxResponseSizeBytes}'`
-    );
-  }
-  if (
-    options.maxRedirects !== undefined &&
-    (!Number.isFinite(options.maxRedirects) ||
-      options.maxRedirects < 0 ||
-      !Number.isInteger(options.maxRedirects))
-  ) {
-    throw new USCCBArgumentError(
-      `maxRedirects must be a non-negative integer; received '${options.maxRedirects}'`
-    );
-  }
+  assertNonNegativeInteger(options.timeoutMs, "timeoutMs");
+  assertNonNegativeInteger(
+    options.maxResponseSizeBytes,
+    "maxResponseSizeBytes"
+  );
+  assertNonNegativeInteger(options.maxRedirects, "maxRedirects");
+  assertNonNegativeInteger(options.maxRetries, "maxRetries");
+  assertNonNegativeInteger(options.retryBaseDelayMs, "retryBaseDelayMs");
+  assertNonNegativeInteger(options.retryMaxDelayMs, "retryMaxDelayMs");
+  assertNonNegativeInteger(
+    options.maxTotalRetryDelayMs,
+    "maxTotalRetryDelayMs"
+  );
 
   const {
     useDefaultHeaders = true,
@@ -154,21 +237,44 @@ export function createFetchClient(
     timeoutMs = DEFAULT_TIMEOUT_MS,
     maxResponseSizeBytes = MAX_RESPONSE_SIZE_BYTES,
     maxRedirects = MAX_REDIRECTS,
+    maxRetries = DEFAULT_MAX_RETRIES,
+    retryBaseDelayMs = DEFAULT_RETRY_BASE_DELAY_MS,
+    retryMaxDelayMs = DEFAULT_RETRY_MAX_DELAY_MS,
+    maxTotalRetryDelayMs = DEFAULT_MAX_TOTAL_RETRY_DELAY_MS,
+    random = Math.random,
   } = options;
   const resolvedFetch = obolus
     ? wrapFetchWithObolus(fetchImpl, { maxResponseSizeBytes })
     : fetchImpl;
 
-  async function executeRequest(
+  function computeRetryDelayMs(
+    attempt: number,
+    retryAfterMs: number | null,
+    remainingBudgetMs: number
+  ): number | null {
+    if (remainingBudgetMs <= 0) {
+      return null;
+    }
+    if (retryAfterMs !== null) {
+      if (retryAfterMs > remainingBudgetMs || retryAfterMs > retryMaxDelayMs) {
+        return null;
+      }
+      return retryAfterMs;
+    }
+    const expDelay = Math.min(retryMaxDelayMs, retryBaseDelayMs * 2 ** attempt);
+    const jitter = 0.5 + 0.5 * Math.max(0, Math.min(1, random()));
+    const delay = Math.floor(expDelay * jitter);
+    return Math.min(delay, remainingBudgetMs);
+  }
+
+  async function executeSingleAttempt(
     urlStr: string,
     method: "GET" | "HEAD",
-    callerOptions?: HttpRequestOptions
-  ): Promise<HttpResponse> {
-    const signal = combineSignals(
-      callerOptions?.timeoutMs ?? timeoutMs,
-      callerOptions?.signal
-    );
-
+    signal?: AbortSignal
+  ): Promise<
+    | { kind: "response"; response: HttpResponse; retryAfterMs: number | null }
+    | { kind: "retryable_error"; error: USCCBNetworkError }
+  > {
     let currentUrl = new URL(urlStr);
     let redirects = 0;
 
@@ -193,14 +299,36 @@ export function createFetchClient(
       try {
         response = await resolvedFetch(currentUrl.href, init);
       } catch (error) {
+        if (error instanceof USCCBBotChallengeError) {
+          throw error;
+        }
         if (error instanceof USCCBError) {
           throw error;
         }
+        if (signal?.aborted || isAbortOrTimeoutError(error)) {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          throw new USCCBNetworkError(
+            `Network request failed for ${sanitizeUrlForLog(currentUrl.href)}: ${message}`,
+            {
+              cause: error,
+              url: sanitizeUrlForLog(currentUrl.href),
+              retryable: false,
+            }
+          );
+        }
         const message = error instanceof Error ? error.message : String(error);
-        throw new USCCBNetworkError(
-          `Network request failed for ${currentUrl.href}: ${message}`,
-          { cause: error, url: currentUrl.href }
-        );
+        return {
+          kind: "retryable_error",
+          error: new USCCBNetworkError(
+            `Network request failed for ${sanitizeUrlForLog(currentUrl.href)}: ${message}`,
+            {
+              cause: error,
+              url: sanitizeUrlForLog(currentUrl.href),
+              retryable: true,
+            }
+          ),
+        };
       }
 
       if (
@@ -213,14 +341,26 @@ export function createFetchClient(
         if (location) {
           if (redirects >= maxRedirects) {
             throw new USCCBNetworkError("Maximum redirect count exceeded", {
-              url: currentUrl.href,
+              url: sanitizeUrlForLog(currentUrl.href),
+              retryable: false,
             });
           }
           const targetUrl = new URL(location, currentUrl);
+          if (
+            (targetUrl.protocol !== "https:" &&
+              targetUrl.protocol !== "http:") ||
+            targetUrl.username ||
+            targetUrl.password
+          ) {
+            throw new USCCBNetworkError(
+              `Unsafe redirect target from ${currentUrl.origin} is not allowed`,
+              { url: sanitizeUrlForLog(currentUrl.href), retryable: false }
+            );
+          }
           if (targetUrl.origin !== currentUrl.origin) {
             throw new USCCBNetworkError(
               `Cross-origin redirect from ${currentUrl.origin} to ${targetUrl.origin} is not allowed`,
-              { url: currentUrl.href }
+              { url: sanitizeUrlForLog(currentUrl.href), retryable: false }
             );
           }
           currentUrl = targetUrl;
@@ -231,12 +371,12 @@ export function createFetchClient(
 
       if (response.url) {
         try {
-          const finalUrl = new URL(response.url);
+          const finalUrl = new URL(response.url, currentUrl.href);
           const originalUrl = new URL(urlStr);
           if (finalUrl.origin !== originalUrl.origin) {
             throw new USCCBNetworkError(
               `Cross-origin redirect detected: ${originalUrl.origin} -> ${finalUrl.origin}`,
-              { url: response.url }
+              { url: sanitizeUrlForLog(response.url), retryable: false }
             );
           }
         } catch (e) {
@@ -244,12 +384,21 @@ export function createFetchClient(
         }
       }
 
+      const retryAfterMs =
+        response.headers && typeof response.headers.get === "function"
+          ? parseRetryAfterMs(response.headers.get("retry-after"))
+          : null;
+
       if (method === "HEAD") {
         return {
-          text: "",
-          ok: response.ok,
-          status: response.status,
-          url: response.url || currentUrl.href,
+          kind: "response",
+          response: {
+            text: "",
+            ok: response.ok,
+            status: response.status,
+            url: response.url || currentUrl.href,
+          },
+          retryAfterMs,
         };
       }
 
@@ -261,8 +410,12 @@ export function createFetchClient(
           !isHtmlOrXmlContentType(contentType)
         ) {
           throw new USCCBNetworkError(
-            `Expected HTML content type from ${currentUrl.href}, but received ${contentType}`,
-            { url: currentUrl.href, status: response.status }
+            `Expected HTML content type from ${sanitizeUrlForLog(currentUrl.href)}, but received ${contentType}`,
+            {
+              url: sanitizeUrlForLog(currentUrl.href),
+              status: response.status,
+              retryable: false,
+            }
           );
         }
       }
@@ -276,18 +429,84 @@ export function createFetchClient(
         }
         const message = error instanceof Error ? error.message : String(error);
         throw new USCCBNetworkError(
-          `Failed to read response body from ${currentUrl.href}: ${message}`,
-          { cause: error, url: currentUrl.href, status: response.status }
+          `Failed to read response body from ${sanitizeUrlForLog(currentUrl.href)}: ${message}`,
+          {
+            cause: error,
+            url: sanitizeUrlForLog(currentUrl.href),
+            status: response.status,
+          }
         );
       }
 
       return {
-        text,
-        ok: response.ok,
-        status: response.status,
-        url: response.url || currentUrl.href,
+        kind: "response",
+        response: {
+          text,
+          ok: response.ok,
+          status: response.status,
+          url: response.url || currentUrl.href,
+        },
+        retryAfterMs,
       };
     }
+  }
+
+  async function executeRequest(
+    urlStr: string,
+    method: "GET" | "HEAD",
+    callerOptions?: HttpRequestOptions
+  ): Promise<HttpResponse> {
+    const signal = combineSignals(
+      callerOptions?.timeoutMs ?? timeoutMs,
+      callerOptions?.signal
+    );
+
+    let remainingBudgetMs = maxTotalRetryDelayMs;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      if (signal?.aborted) {
+        signal.throwIfAborted();
+      }
+
+      const outcome = await executeSingleAttempt(urlStr, method, signal);
+
+      if (outcome.kind === "response") {
+        const { response, retryAfterMs } = outcome;
+        if (
+          !RETRYABLE_HTTP_STATUSES.has(response.status) ||
+          attempt >= maxRetries
+        ) {
+          return response;
+        }
+        const delayMs = computeRetryDelayMs(
+          attempt,
+          retryAfterMs,
+          remainingBudgetMs
+        );
+        if (delayMs === null) {
+          return response;
+        }
+        remainingBudgetMs -= delayMs;
+        await sleepWithSignal(delayMs, signal);
+        continue;
+      }
+
+      if (attempt >= maxRetries) {
+        throw outcome.error;
+      }
+
+      const delayMs = computeRetryDelayMs(attempt, null, remainingBudgetMs);
+      if (delayMs === null) {
+        throw outcome.error;
+      }
+      remainingBudgetMs -= delayMs;
+      await sleepWithSignal(delayMs, signal);
+    }
+
+    throw new USCCBNetworkError(
+      `Network request failed for ${sanitizeUrlForLog(urlStr)}`,
+      { url: sanitizeUrlForLog(urlStr), retryable: true }
+    );
   }
 
   const client: HttpClient = {

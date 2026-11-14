@@ -17,6 +17,7 @@ import {
   readingHeader,
   readingToDict,
   sectionToDict,
+  sectionTypeFromHeader,
   verseToDict,
   Verse,
 } from "../src/models.js";
@@ -242,5 +243,65 @@ describe("dictionary serialization and DTOs", () => {
     const serialized = massToDict(nullTypeMass);
     expect("type_" in serialized).toBe(false);
     expect("date" in serialized).toBe(false);
+  });
+});
+
+describe("sectionTypeFromHeader", () => {
+  it("classifies Gospel acclamations and Verse Before the Gospel as ALLELUIA, never GOSPEL", () => {
+    expect(sectionTypeFromHeader("Verse Before the Gospel")).toBe(
+      SectionType.ALLELUIA
+    );
+    expect(sectionTypeFromHeader("Gospel Acclamation")).toBe(
+      SectionType.ALLELUIA
+    );
+    expect(sectionTypeFromHeader("Alleluia")).toBe(SectionType.ALLELUIA);
+    expect(
+      sectionTypeFromHeader("Praise to you, Lord Jesus Christ, King of glory!")
+    ).toBe(SectionType.ALLELUIA);
+    expect(
+      sectionTypeFromHeader("Glory and praise to you, Lord Jesus Christ!")
+    ).toBe(SectionType.ALLELUIA);
+    expect(
+      sectionTypeFromHeader("Glory to you, Word of God, Lord Jesus Christ!")
+    ).toBe(SectionType.ALLELUIA);
+  });
+
+  it("classifies Gospel, Reading, Psalm, Sequence, and Alternative headers accurately", () => {
+    expect(sectionTypeFromHeader("Gospel")).toBe(SectionType.GOSPEL);
+    expect(sectionTypeFromHeader("Gospel (Long Form)")).toBe(
+      SectionType.GOSPEL
+    );
+    expect(sectionTypeFromHeader("Responsorial Psalm")).toBe(SectionType.PSALM);
+    expect(sectionTypeFromHeader("Reading 1")).toBe(SectionType.READING);
+    expect(sectionTypeFromHeader("Reading II")).toBe(SectionType.READING);
+    expect(sectionTypeFromHeader("Sequence")).toBe(SectionType.SEQUENCE);
+    expect(sectionTypeFromHeader("OR")).toBe(SectionType.ALTERNATIVE);
+    expect(sectionTypeFromHeader("Or:")).toBe(SectionType.ALTERNATIVE);
+    expect(sectionTypeFromHeader("Alternative")).toBe(SectionType.ALTERNATIVE);
+    expect(sectionTypeFromHeader("Memorial")).toBe(SectionType.UNKNOWN);
+  });
+
+  it("never appends Gospel conclusions to Verse Before the Gospel when formatted", () => {
+    const verseSection: Section = {
+      type: sectionTypeFromHeader("Verse Before the Gospel"),
+      header: "Verse Before the Gospel",
+      readings: [
+        {
+          verses: [
+            {
+              text: "Joel 2:12-13",
+              link: "https://bible.usccb.org/bible/joel/2?12",
+              book: "Joel",
+            },
+          ],
+          text: "Return to the Lord, your God.",
+        },
+      ],
+    };
+    const formatted = formatReading(verseSection.readings[0], verseSection);
+    expect(formatted).toContain("Verse Before the Gospel: Joel 2:12-13");
+    expect(formatted).not.toContain("The Gospel of the Lord.");
+    expect(formatted).not.toContain("Praise to you, Lord Jesus Christ.");
+    expect(formatted).not.toContain("A reading from");
   });
 });

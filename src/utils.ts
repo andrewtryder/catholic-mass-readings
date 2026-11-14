@@ -11,7 +11,8 @@ const ABBREVIATED_BOOK_PATTERN = /([0-9]?\s?[A-Z][a-z]*):?/g;
 const BOOK_LINK_PATTERN = /bible\/([^/]+)/;
 const ROMAN_NUMERAL_PATTERN = /(?:\s|^)([IVXLCDM]+)$/i;
 const NUMERAL_PATTERN = /(?:\s|^)([0-9]+)$/;
-const URL_PATTERN = /readings\/(?<DATE>\d{6})-?(?<TYPE>[A-Z]*)\.cfm$/i;
+const URL_PATTERN =
+  /(?:^|\/)readings\/(?<DATE>\d{6})(?:-(?<TYPE>[a-z0-9]+(?:-[a-z0-9]+)*))?\.cfm$/i;
 
 const ROMAN_VALUES: Record<string, number> = {
   I: 1,
@@ -54,6 +55,15 @@ export function assertUsccbReadingsUrl(rawUrl: string): URL {
   }
 
   return url;
+}
+
+/** Format a date as `YYYY-MM-DD` in local calendar time. */
+export function formatIsoDate(date: Date): string {
+  assertValidDate(date, "date");
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
 
 /** Format a date as `MMDDYY` for USCCB URL paths. */

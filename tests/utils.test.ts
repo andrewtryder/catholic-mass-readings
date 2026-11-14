@@ -5,6 +5,7 @@ import {
   addDays,
   assertUsccbReadingsUrl,
   assertValidDate,
+  formatIsoDate,
   formatUrlDate,
   getBookFromVerse,
   getReadingNumber,
@@ -59,13 +60,36 @@ describe("parseUrl", () => {
     ).toEqual([new Date(2025, 11, 25), ""]);
   });
 
-  it("returns null for invalid URLs or impossible calendar dates", () => {
+  it("parses USCCB reading URLs with hyphenated and complex suffixes", () => {
+    expect(
+      parseUrl("https://bible.usccb.org/bible/readings/122524-vigil-mass.cfm")
+    ).toEqual([new Date(2024, 11, 25), "vigil-mass"]);
+    expect(
+      parseUrl("https://bible.usccb.org/bible/readings/041925-easter-vigil.cfm")
+    ).toEqual([new Date(2025, 3, 19), "easter-vigil"]);
+    expect(
+      parseUrl(
+        "https://bible.usccb.org/bible/readings/122525-mass-during-day.cfm"
+      )
+    ).toEqual([new Date(2025, 11, 25), "mass-during-day"]);
+  });
+
+  it("returns null for invalid URLs, malformed suffixes, or impossible calendar dates", () => {
     expect(parseUrl("https://example.com/unknown")).toBeNull();
     expect(
       parseUrl("https://bible.usccb.org/bible/readings/043125.cfm")
     ).toBeNull();
     expect(
       parseUrl("https://bible.usccb.org/bible/readings/022925.cfm")
+    ).toBeNull();
+    expect(
+      parseUrl("https://bible.usccb.org/bible/readings/122525-.cfm")
+    ).toBeNull();
+    expect(
+      parseUrl("https://bible.usccb.org/bible/readings/122525--vigil.cfm")
+    ).toBeNull();
+    expect(
+      parseUrl("https://bible.usccb.org/bible/readings/122525.html")
     ).toBeNull();
   });
 });
@@ -163,5 +187,15 @@ describe("assertUsccbReadingsUrl", () => {
     expect(() => assertUsccbReadingsUrl("not-a-url")).toThrow(
       USCCBArgumentError
     );
+  });
+});
+
+describe("formatIsoDate", () => {
+  it("formats local calendar date as YYYY-MM-DD", () => {
+    expect(formatIsoDate(new Date(2025, 0, 5))).toBe("2025-01-05");
+  });
+
+  it("throws USCCBArgumentError for invalid date", () => {
+    expect(() => formatIsoDate(new Date(NaN))).toThrow(USCCBArgumentError);
   });
 });

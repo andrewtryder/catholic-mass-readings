@@ -16,6 +16,7 @@ import {
 } from "./constants.js";
 import { USCCBArgumentError } from "./errors.js";
 import {
+  formatIsoDate,
   formatUrlDate,
   getReadingNumber,
   lookupBook,
@@ -91,15 +92,29 @@ export enum SectionType {
   SEQUENCE = "SEQUENCE",
 }
 
+const ACCLAMATION_PATTERNS = [
+  "alleluia",
+  "verse before the gospel",
+  "gospel acclamation",
+  "acclamation",
+  "praise to you, lord jesus christ",
+  "glory and praise to you",
+  "glory to you, word of god",
+];
+
 /** Infer section type from the USCCB section header text. */
 export function sectionTypeFromHeader(header: string): SectionType {
-  const lower = header.toLowerCase();
-  if (lower.includes("alleluia")) return SectionType.ALLELUIA;
+  const lower = header.trim().toLowerCase();
+  if (ACCLAMATION_PATTERNS.some((pattern) => lower.includes(pattern))) {
+    return SectionType.ALLELUIA;
+  }
   if (lower.includes("gospel")) return SectionType.GOSPEL;
   if (lower.includes("psalm")) return SectionType.PSALM;
   if (lower.includes("sequence")) return SectionType.SEQUENCE;
   if (lower.includes("reading")) return SectionType.READING;
-  if (lower.includes("or")) return SectionType.ALTERNATIVE;
+  if (/\bor\b/i.test(lower) || lower.includes("alternative")) {
+    return SectionType.ALTERNATIVE;
+  }
   return SectionType.UNKNOWN;
 }
 
@@ -237,12 +252,13 @@ export function sectionFooter(section: Section): string {
 }
 
 function adaptReading(section: Section, reading: Reading): Reading {
-  return reading.verses.length > 0
-    ? reading
-    : {
-        verses: section.readings[section.readings.length - 1].verses,
-        text: reading.text,
-      };
+  if (reading.verses.length > 0 || section.readings.length === 0) {
+    return reading;
+  }
+  return {
+    verses: section.readings[section.readings.length - 1].verses,
+    text: reading.text,
+  };
 }
 
 export function sectionAddAlternative(
@@ -326,11 +342,4 @@ export function massToDict(
     result.type_ = mass.type;
   }
   return result;
-}
-
-function formatIsoDate(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
 }

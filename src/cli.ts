@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 
+import { realpathSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { Command, Option } from "commander";
 
 import {
@@ -13,7 +15,12 @@ import {
 } from "./models.js";
 import { createNodeHttpClient } from "./http-node.js";
 import { USCCB } from "./usccb.js";
-import { addDays, parseIsoDate, todayInNewYork } from "./utils.js";
+import {
+  addDays,
+  formatIsoDate,
+  parseIsoDate,
+  todayInNewYork,
+} from "./utils.js";
 import { USCCBArgumentError } from "./errors.js";
 
 const DATE_FMT = "YYYY-MM-DD";
@@ -79,13 +86,6 @@ export async function mapWithConcurrency<T, R>(
   );
 
   return results;
-}
-
-function formatIsoDate(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
 }
 
 function parseDateOption(value: string): Date {
@@ -377,7 +377,19 @@ async function printMassRange(
   }
 }
 
-program.parseAsync(process.argv).catch((error: unknown) => {
-  logger.error(error);
-  process.exitCode = 1;
-});
+function isMainModule(): boolean {
+  const entry = process.argv[1];
+  if (!entry) return false;
+  try {
+    return realpathSync(entry) === realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
+}
+
+if (isMainModule()) {
+  program.parseAsync(process.argv).catch((error: unknown) => {
+    logger.error(error);
+    process.exitCode = 1;
+  });
+}

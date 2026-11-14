@@ -26,7 +26,7 @@ If you just want to look up Mass readings on your computer, you don't even need 
 
 ### Prerequisites
 
-Make sure you have [Node.js](https://nodejs.org/) (version 20 or higher) installed on your computer.
+Make sure you have [Node.js](https://nodejs.org/) (version 22 or higher) installed on your computer.
 
 ### Option 1: Run Instantly with `npx` (No Installation Needed)
 
@@ -208,6 +208,28 @@ main();
 
 Full API definitions, interfaces (`Mass`, `Section`, `Reading`, `Verse`), and TypeDoc documentation are published automatically to GitHub Pages:
 👉 **[Full API Reference](https://andrewtryder.github.io/catholic-mass-readings/)**
+
+### Optional Dependencies (`impit`)
+
+`impit` is declared in `optionalDependencies` to provide Chrome-like TLS fingerprinting for Node.js requests. If `impit` cannot be installed on your platform or is omitted (`npm install --omit=optional`), `createNodeHttpClient()` automatically falls back to the built-in Node.js `fetch` API without failing.
+
+### Retries, Timeouts & Error Handling
+
+`createFetchClient()` (and `createNodeHttpClient()`) enforces bounded defaults and automatic transient retries:
+
+- **Timeouts**: `15_000` ms default (`timeoutMs`), cancellable via `AbortSignal`.
+- **Retries**: Up to `2` retries (`maxRetries`) with exponential backoff + jitter (`retryBaseDelayMs: 250`, `retryMaxDelayMs: 10_000`, `maxTotalRetryDelayMs: 30_000`) for HTTP `429`, `502`, `503`, `504` and transient socket errors, respecting `Retry-After` headers.
+- **Safety Limits**: `3` MB max response body (`maxResponseSizeBytes`) and `5` max same-origin redirects (`maxRedirects`).
+- **Typed Errors**: Throws `USCCBArgumentError` (invalid inputs/URLs), `USCCBNetworkError` (HTTP/network failures with `status`, `url`, `retryable`), `USCCBBotChallengeError` (anti-bot solver failures), or `USCCBParseError` (unrecognizable/blocked HTML).
+
+### Security & `getMassFromTrustedUrl()`
+
+- `usccb.getMassFromUrl(url)` strictly enforces `https://bible.usccb.org/bible/readings/...` and rejects credentials.
+- `usccb.getMassFromTrustedUrl(url)` bypasses the `bible.usccb.org` origin allowlist (for mirrors or custom test servers). **Do not pass untrusted user-supplied URLs to `getMassFromTrustedUrl()`**, as doing so can expose your application to Server-Side Request Forgery (SSRF).
+
+### Limitations of USCCB Scraping
+
+This library parses HTML pages served by `bible.usccb.org`. Upstream layout changes, missing dates, or aggressive bot-mitigation changes on USCCB may cause `USCCBParseError` or `USCCBNetworkError` until the parser or challenge solver is updated.
 
 ---
 

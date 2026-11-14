@@ -1,10 +1,15 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import type { HttpClient } from "../src/http.js";
-import { USCCBArgumentError } from "../src/errors.js";
+import { USCCBArgumentError, USCCBParseError } from "../src/errors.js";
 import { MassType, SectionType, massToString } from "../src/models.js";
 import { USCCB } from "../src/usccb.js";
 import { parseIsoDate } from "../src/utils.js";
+
+const dataDir = join(dirname(fileURLToPath(import.meta.url)), "data");
 
 function buildUsccbHtml(
   title: string,
@@ -272,7 +277,7 @@ describe("Liturgical seasons and special celebrations", () => {
     expect(mass.sections[0].readings[2].verses[0].book).toBe("Isaiah");
   });
 
-  it("handles container with missing .content-body gracefully when verses exist", () => {
+  it("throws USCCBParseError when a reading has citation metadata but no .content-body", () => {
     const html = `<!DOCTYPE html>
 <html>
   <head><title>Partial Container | USCCB</title></head>
@@ -284,15 +289,177 @@ describe("Liturgical seasons and special celebrations", () => {
   </body>
 </html>`;
 
+    expect(() =>
+      usccb.parseMass(
+        html,
+        "https://bible.usccb.org/bible/readings/080625.cfm",
+        parseIsoDate("2025-08-06"),
+        MassType.DEFAULT
+      )
+    ).toThrow(USCCBParseError);
+    expect(() =>
+      usccb.parseMass(
+        html,
+        "https://bible.usccb.org/bible/readings/080625.cfm",
+        parseIsoDate("2025-08-06"),
+        MassType.DEFAULT
+      )
+    ).toThrow('USCCB reading section "Reading 1" is missing reading text');
+  });
+
+  it("throws USCCBParseError when a reading has citation metadata and an empty .content-body", () => {
+    const html = `<!DOCTYPE html>
+<html>
+  <head><title>Empty Body Container | USCCB</title></head>
+  <body>
+    <div class="container">
+      <div class="name">Gospel</div>
+      <div class="address"><a href="https://bible.usccb.org/bible/john/1?1">Jn 1:1</a></div>
+      <div class="content-body">   </div>
+    </div>
+  </body>
+</html>`;
+
+    expect(() =>
+      usccb.parseMass(
+        html,
+        "https://bible.usccb.org/bible/readings/080625.cfm",
+        parseIsoDate("2025-08-06"),
+        MassType.DEFAULT
+      )
+    ).toThrow(USCCBParseError);
+  });
+
+  it("parses authentic Lenten Sunday HTML snapshot with Verse Before the Gospel", () => {
+    const html = readFileSync(join(dataDir, "lent-first-sunday.html"), "utf-8");
     const mass = usccb.parseMass(
       html,
-      "https://bible.usccb.org/bible/readings/080625.cfm",
-      parseIsoDate("2025-08-06"),
+      "https://bible.usccb.org/bible/readings/030925.cfm",
+      parseIsoDate("2025-03-09"),
       MassType.DEFAULT
     );
-    expect(mass.sections).toHaveLength(1);
+
+    expect(mass.title).toBe("First Sunday of Lent");
+    expect(mass.sections.map((s) => s.type)).toEqual([
+      SectionType.READING,
+      SectionType.PSALM,
+      SectionType.READING,
+      SectionType.ALLELUIA,
+      SectionType.GOSPEL,
+    ]);
+    expect(mass.sections[0].readings[0].verses[0].book).toBe("Deuteronomy");
+    expect(mass.sections[3].header).toBe("Verse Before the Gospel");
+    expect(mass.sections[3].readings[0].text).toContain(
+      "Praise to you, Lord Jesus Christ"
+    );
+    expect(mass.sections[4].readings[0].verses[0].book).toBe("Luke");
+  });
+
+  it("parses authentic Easter Vigil HTML snapshot with interleaved psalms, OR alternative, and Epistle", () => {
+    const html = readFileSync(join(dataDir, "easter-vigil.html"), "utf-8");
+    const mass = usccb.parseMass(
+      html,
+      "https://bible.usccb.org/bible/readings/040426.cfm",
+      parseIsoDate("2026-04-04"),
+      MassType.VIGIL
+    );
+
+    expect(mass.title).toBe("The Easter Vigil in the Holy Night");
+    expect(mass.sections.map((s) => s.type)).toEqual([
+      SectionType.READING,
+      SectionType.PSALM,
+      SectionType.READING,
+      SectionType.PSALM,
+      SectionType.READING,
+      SectionType.PSALM,
+      SectionType.READING,
+      SectionType.ALLELUIA,
+      SectionType.GOSPEL,
+    ]);
+    expect(mass.sections[0].readings).toHaveLength(2);
     expect(mass.sections[0].readings[0].verses[0].book).toBe("Genesis");
-    expect(mass.sections[0].readings[0].text).toBe("");
+    expect(mass.sections[0].readings[1].verses[0].text).toBe("Gn 1:1, 26-31a");
+    expect(mass.sections[6].header).toBe("Epistle");
+    expect(mass.sections[6].readings[0].verses[0].book).toBe("Romans");
+    expect(mass.sections[8].readings[0].verses[0].book).toBe("Luke");
+  });
+
+  it("parses authentic Christmas Mass variant HTML snapshots (Vigil, Night, Dawn, Day)", () => {
+    const variants: Array<{
+      file: string;
+      urlSuffix: string;
+      type: MassType;
+      expectedTitle: string;
+      expectedFirstBook: string;
+      expectedGospelReadings: number;
+      expectedAlleluiaVerses: number;
+    }> = [
+      {
+        file: "christmas-vigil.html",
+        urlSuffix: "122525-Vigil.cfm",
+        type: MassType.VIGIL,
+        expectedTitle: "The Nativity of the Lord (Christmas) — Vigil Mass",
+        expectedFirstBook: "Isaiah",
+        expectedGospelReadings: 2,
+        expectedAlleluiaVerses: 0,
+      },
+      {
+        file: "christmas-night.html",
+        urlSuffix: "122525-Night.cfm",
+        type: MassType.NIGHT,
+        expectedTitle:
+          "The Nativity of the Lord (Christmas) — Mass during the Night",
+        expectedFirstBook: "Isaiah",
+        expectedGospelReadings: 1,
+        expectedAlleluiaVerses: 1,
+      },
+      {
+        file: "christmas-dawn.html",
+        urlSuffix: "122525-Dawn.cfm",
+        type: MassType.DAWN,
+        expectedTitle: "The Nativity of the Lord (Christmas) — Mass at Dawn",
+        expectedFirstBook: "Isaiah",
+        expectedGospelReadings: 1,
+        expectedAlleluiaVerses: 1,
+      },
+      {
+        file: "christmas-day.html",
+        urlSuffix: "122525-Day.cfm",
+        type: MassType.DAY,
+        expectedTitle:
+          "The Nativity of the Lord (Christmas) — Mass during the Day",
+        expectedFirstBook: "Isaiah",
+        expectedGospelReadings: 2,
+        expectedAlleluiaVerses: 0,
+      },
+    ];
+
+    for (const v of variants) {
+      const html = readFileSync(join(dataDir, v.file), "utf-8");
+      const mass = usccb.parseMass(
+        html,
+        `https://bible.usccb.org/bible/readings/${v.urlSuffix}`,
+        parseIsoDate("2025-12-25"),
+        v.type
+      );
+
+      expect(mass.title).toBe(v.expectedTitle);
+      expect(mass.type).toBe(v.type);
+      expect(mass.sections.map((s) => s.type)).toEqual([
+        SectionType.READING,
+        SectionType.PSALM,
+        SectionType.READING,
+        SectionType.ALLELUIA,
+        SectionType.GOSPEL,
+      ]);
+      expect(mass.sections[0].readings[0].verses[0].book).toBe(
+        v.expectedFirstBook
+      );
+      expect(mass.sections[3].readings[0].verses).toHaveLength(
+        v.expectedAlleluiaVerses
+      );
+      expect(mass.sections[4].readings).toHaveLength(v.expectedGospelReadings);
+    }
   });
 });
 

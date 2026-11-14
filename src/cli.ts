@@ -208,9 +208,33 @@ program
   .action(async (options: { date: string }) => {
     const date = parseDateOption(options.date);
     const usccb = new USCCB(await createNodeHttpClient());
-    const massTypes = await usccb.getMassTypes(date);
-    for (const massType of massTypes) {
+    const result = await usccb.getMassTypesDetailed(date);
+    for (const massType of result.types) {
       console.log(REVERSE_MASS_TYPE.get(massType) ?? massType);
+    }
+    if (!result.complete) {
+      if (result.types.length === 0) {
+        const firstError = result.failedTypes
+          .map((t) => result.errors[t])
+          .find((e) => e !== undefined);
+        if (firstError) {
+          throw firstError;
+        }
+      }
+      const failedNames = result.failedTypes.map(
+        (t) => REVERSE_MASS_TYPE.get(t) ?? t
+      );
+      logger.error(
+        `Incomplete mass type probe for ${options.date}: failed to check ${failedNames.join(", ")}`
+      );
+      for (const failedType of result.failedTypes) {
+        const err = result.errors[failedType];
+        if (err) {
+          const name = REVERSE_MASS_TYPE.get(failedType) ?? failedType;
+          logger.error(`Failed probing ${name}: ${err.message}`);
+        }
+      }
+      process.exitCode = 1;
     }
   });
 

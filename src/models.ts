@@ -111,7 +111,9 @@ export function sectionTypeFromHeader(header: string): SectionType {
   if (lower.includes("gospel")) return SectionType.GOSPEL;
   if (lower.includes("psalm")) return SectionType.PSALM;
   if (lower.includes("sequence")) return SectionType.SEQUENCE;
-  if (lower.includes("reading")) return SectionType.READING;
+  if (lower.includes("reading") || lower.includes("epistle")) {
+    return SectionType.READING;
+  }
   if (/\bor\b/i.test(lower) || lower.includes("alternative")) {
     return SectionType.ALTERNATIVE;
   }

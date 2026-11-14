@@ -49,13 +49,7 @@ export function parseMassHtml(
   }
 
   const hasReadingContent = sections.some((section) =>
-    section.readings.some(
-      (reading) =>
-        reading.text.trim().length > 0 ||
-        reading.verses.some(
-          (v) => v.text.trim().length > 0 || v.link.trim().length > 0
-        )
-    )
+    section.readings.some((reading) => reading.text.trim().length > 0)
   );
   if (!hasReadingContent) {
     throw new USCCBParseError(
@@ -89,10 +83,18 @@ function getSections($: cheerio.CheerioAPI): Section[] {
       }
     }
 
+    const hasCitations = verses.some(
+      (v) => v.text.trim().length > 0 || v.link.trim().length > 0
+    );
     const hasBodyText =
       contentBody.length > 0 && cleanText(contentBody.text()).trim().length > 0;
     if (verses.length === 0 && !hasBodyText) {
       continue;
+    }
+    if (hasCitations && !hasBodyText) {
+      throw new USCCBParseError(
+        `USCCB reading section "${header}" is missing reading text`
+      );
     }
 
     const sectionType = sectionTypeFromHeader(header);

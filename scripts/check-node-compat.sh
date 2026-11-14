@@ -18,7 +18,7 @@ if command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/n
     done <<< "$STAGED_FILES"
 
     if [ "$AFFECTS_COMPAT" = false ]; then
-      echo "Skipping full Node 20 compatibility check: staged changes are documentation-only."
+      echo "Skipping full Node 22 compatibility check: staged changes are documentation-only."
       exit 0
     fi
   fi
@@ -89,7 +89,7 @@ cd "$REPO_COPY"
 export HUSKY=0
 export npm_config_engine_strict=true
 
-# 4. In the clean Node 20 environment, run build, checks, and pack
+# 4. In the clean Node 22 environment, run build, checks, and pack
 echo "Running clean npm ci (--engine-strict)..."
 npm ci --engine-strict --no-audit --no-fund
 

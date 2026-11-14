@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { combineSignals, createFetchClient } from "../src/http.js";
+import {
+  combineSignals,
+  createFetchClient,
+  parseRetryAfterMs,
+} from "../src/http.js";
 import { USCCBArgumentError, USCCBNetworkError } from "../src/errors.js";
 
 function mockFetchResponse(options: {
@@ -367,5 +371,143 @@ describe("option and timeout validation", () => {
     expect(() => combineSignals(5.5)).toThrow(USCCBArgumentError);
     expect(() => combineSignals(NaN)).toThrow(USCCBArgumentError);
     expect(() => combineSignals(Infinity)).toThrow(USCCBArgumentError);
+  });
+
+  it("blocks unsafe non-http/https redirect targets", async () => {
+    const fetchImpl = vi.fn().mockImplementation(async (urlStr: string) =>
+      mockFetchResponse({
+        status: 302,
+        headers: { location: "file:///etc/passwd" },
+        url: urlStr,
+      })
+    );
+
+    const client = createFetchClient(fetchImpl, { obolus: false });
+    await expect(
+      client.get("https://bible.usccb.org/bible/readings/010125.cfm")
+    ).rejects.toThrow(/Unsafe redirect target/i);
+  });
+});
+
+describe("createFetchClient retry and backoff behavior", () => {
+  it("retries transient HTTP 429, 502, 503, and 504 responses and succeeds", async () => {
+    for (const status of [429, 502, 503, 504]) {
+      const fetchImpl = vi
+        .fn()
+        .mockResolvedValueOnce(mockFetchResponse({ status, body: "busy" }))
+        .mockResolvedValueOnce(
+          mockFetchResponse({ status: 200, body: "<html>ok</html>" })
+        );
+
+      const client = createFetchClient(fetchImpl, {
+        obolus: false,
+        maxRetries: 2,
+        retryBaseDelayMs: 1,
+        retryMaxDelayMs: 10,
+        random: () => 0.5,
+      });
+
+      const res = await client.get(
+        "https://bible.usccb.org/bible/readings/010125.cfm"
+      );
+      expect(res.ok).toBe(true);
+      expect(res.text).toBe("<html>ok</html>");
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+    }
+  });
+
+  it("retries transient network rejections and throws USCCBNetworkError when exhausted", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockRejectedValue(new Error("ECONNRESET: socket hang up"));
+
+    const client = createFetchClient(fetchImpl, {
+      obolus: false,
+      maxRetries: 2,
+      retryBaseDelayMs: 1,
+      retryMaxDelayMs: 10,
+      random: () => 0,
+    });
+
+    const err = await client
+      .get("https://bible.usccb.org/bible/readings/010125.cfm")
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(USCCBNetworkError);
+    expect((err as USCCBNetworkError).retryable).toBe(true);
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+  });
+
+  it("does not retry permanent HTTP errors like 404 or 500", async () => {
+    for (const status of [400, 404, 500]) {
+      const fetchImpl = vi
+        .fn()
+        .mockResolvedValue(mockFetchResponse({ status, body: "err" }));
+      const client = createFetchClient(fetchImpl, {
+        obolus: false,
+        maxRetries: 2,
+        retryBaseDelayMs: 1,
+      });
+      const res = await client.get(
+        "https://bible.usccb.org/bible/readings/010125.cfm"
+      );
+      expect(res.status).toBe(status);
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it("respects Retry-After header and stops when Retry-After exceeds budget", async () => {
+    const fetchImpl = vi.fn().mockResolvedValueOnce(
+      mockFetchResponse({
+        status: 429,
+        headers: { "content-type": "text/html", "retry-after": "60" },
+        body: "rate limited",
+      })
+    );
+
+    const client = createFetchClient(fetchImpl, {
+      obolus: false,
+      maxRetries: 2,
+      retryBaseDelayMs: 1,
+      retryMaxDelayMs: 500,
+      maxTotalRetryDelayMs: 500,
+    });
+
+    const res = await client.get(
+      "https://bible.usccb.org/bible/readings/010125.cfm"
+    );
+    expect(res.status).toBe(429);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("cancels retry sleep immediately when AbortSignal aborts", async () => {
+    const controller = new AbortController();
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(mockFetchResponse({ status: 503, body: "busy" }));
+
+    const client = createFetchClient(fetchImpl, {
+      obolus: false,
+      maxRetries: 3,
+      retryBaseDelayMs: 5000,
+      retryMaxDelayMs: 5000,
+      maxTotalRetryDelayMs: 10000,
+    });
+
+    const promise = client.get(
+      "https://bible.usccb.org/bible/readings/010125.cfm",
+      { signal: controller.signal }
+    );
+    setTimeout(() => controller.abort(new Error("user cancelled")), 20);
+    await expect(promise).rejects.toThrow("user cancelled");
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("parseRetryAfterMs parses integer seconds and HTTP-dates", () => {
+    expect(parseRetryAfterMs("5", 1000)).toBe(5000);
+    expect(parseRetryAfterMs("0", 1000)).toBe(0);
+    const future = new Date(10_000).toUTCString();
+    expect(parseRetryAfterMs(future, 4000)).toBe(6000);
+    expect(parseRetryAfterMs("invalid")).toBeNull();
+    expect(parseRetryAfterMs(null)).toBeNull();
   });
 });

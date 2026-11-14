@@ -11,6 +11,7 @@ export interface USCCBNetworkErrorOptions {
   status?: number;
   url?: string;
   retryable?: boolean;
+  retryAfterMs?: number;
 }
 
 function isNetworkErrorOptions(
@@ -21,7 +22,7 @@ function isNetworkErrorOptions(
   }
   const keys = Object.keys(value);
   return keys.every((key) =>
-    ["cause", "status", "url", "retryable"].includes(key)
+    ["cause", "status", "url", "retryable", "retryAfterMs"].includes(key)
   );
 }
 
@@ -31,6 +32,7 @@ export class USCCBNetworkError extends USCCBError {
   public readonly status?: number;
   public readonly url?: string;
   public readonly retryable?: boolean;
+  public readonly retryAfterMs?: number;
   public readonly options: USCCBNetworkErrorOptions;
 
   constructor(
@@ -51,6 +53,7 @@ export class USCCBNetworkError extends USCCBError {
       this.status = optionsOrCause.status;
       this.url = optionsOrCause.url;
       this.retryable = optionsOrCause.retryable;
+      this.retryAfterMs = optionsOrCause.retryAfterMs;
       return;
     }
 

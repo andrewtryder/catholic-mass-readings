@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.0.0](https://github.com/andrewtryder/catholic-mass-readings/compare/v0.5.6...v1.0.0) (2026-11-14)
+
+
+### ⚠ BREAKING CHANGES
+
+* comprehensive security, parsing, HTTP, and CI remediation ([#86](https://github.com/andrewtryder/catholic-mass-readings/issues/86))
+
+### Features
+
+* comprehensive security, parsing, HTTP, and CI remediation ([#86](https://github.com/andrewtryder/catholic-mass-readings/issues/86)) ([a018a36](https://github.com/andrewtryder/catholic-mass-readings/commit/a018a3669fd1840d91a426dc8eb4ad80eebc2e27))
+
 ## [0.5.6](https://github.com/andrewtryder/catholic-mass-readings/compare/v0.5.5...v0.5.6) (2026-09-02)
 
 

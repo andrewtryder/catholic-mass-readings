@@ -22,6 +22,4 @@ workflows:
   daily-live-canary:
     when: << pipeline.parameters.daily_canary >>
     jobs:
-      - published-package-canary:
-          context:
-            - catholic-mass-readings-monitoring
+      - published-package-canary

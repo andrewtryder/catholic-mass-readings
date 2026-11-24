@@ -62,8 +62,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "verify": "npm run format:check && npm run lint && npm run typecheck && npm run test:coverage && npm run build",
-    "check:node": "bash scripts/check-node-compat.sh",
-    "test:ci-shell": "bash scripts/circleci/test-healthchecks-notification.sh"
+    "check:node": "bash scripts/check-node-compat.sh"
   },
   "engines": {
     "node": ">=22"

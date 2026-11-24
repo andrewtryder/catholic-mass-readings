@@ -7,10 +7,34 @@ import {
   SectionType,
   USCCB,
   createNodeHttpClient,
+  massTypeToUrl,
   parseIsoDate,
 } from "catholic-mass-readings";
 
 const startedAt = Date.now();
+
+function isoUtcNow() {
+  return new Date().toISOString();
+}
+
+function summarizeError(error) {
+  if (!error || typeof error !== "object") {
+    return { type: "unknown", message: String(error) };
+  }
+  const err = /** @type {Error & { status?: number; cause?: unknown }} */ (
+    error
+  );
+  const cause =
+    err.cause && typeof err.cause === "object" && "message" in err.cause
+      ? String(/** @type {{ message: unknown }} */ (err.cause).message)
+      : undefined;
+  return {
+    type: err.constructor?.name ?? "Error",
+    message: err.message,
+    status: err.status,
+    cause,
+  };
+}
 
 function validateMass(mass, label) {
   assert.ok(mass, `${label}: no Mass was returned`);
@@ -57,6 +81,21 @@ const packageJson = JSON.parse(
   )
 );
 
+const diagnostics = {
+  phase: "startup",
+  utcStartedAt: isoUtcNow(),
+  packageVersion: packageJson.version,
+  nodeVersion: process.version,
+  httpClientFactory: "createNodeHttpClient",
+};
+
+console.log(
+  JSON.stringify({
+    event: "canary_diagnostics",
+    ...diagnostics,
+  })
+);
+
 const client = await createNodeHttpClient({
   timeoutMs: 30_000,
   maxResponseSizeBytes: 3 * 1024 * 1024,
@@ -65,33 +104,105 @@ const client = await createNodeHttpClient({
 
 const usccb = new USCCB(client);
 
-// Stable historical fixture: verifies that parsing and anti-bot handling work.
-const fixedMass = await usccb.getMass(
-  parseIsoDate("2025-08-06"),
-  MassType.DEFAULT,
-  { timeoutMs: 30_000 }
-);
-validateMass(fixedMass, "fixed-date");
+const checkDefs = [
+  {
+    id: "fixed-date",
+    date: parseIsoDate("2025-08-06"),
+    type: MassType.DEFAULT,
+    url: massTypeToUrl(MassType.DEFAULT, parseIsoDate("2025-08-06")),
+  },
+  {
+    id: "current-date",
+    getDate: () => USCCB.today(),
+    getUrl: () => {
+      const date = USCCB.today();
+      return massTypeToUrl(MassType.DEFAULT, date);
+    },
+  },
+];
 
-// Current readings: detects publication changes or date-resolution failures.
-const currentDate = USCCB.today();
-const currentMass = await usccb.getMassFromDate(currentDate, {
-  timeoutMs: 30_000,
-});
-validateMass(currentMass, "current-date");
+/** @type {Record<string, { ok: boolean; durationMs: number; error?: ReturnType<typeof summarizeError>; title?: string; url?: string }>} */
+const results = {};
+
+for (const check of checkDefs) {
+  const date =
+    "date" in check && check.date
+      ? check.date
+      : (check.getDate?.() ?? USCCB.today());
+  const url =
+    "url" in check && check.url
+      ? check.url
+      : (check.getUrl?.() ?? massTypeToUrl(MassType.DEFAULT, date));
+  const checkStarted = Date.now();
+
+  console.log(
+    JSON.stringify({
+      event: "canary_check_start",
+      checkId: check.id,
+      requestedDate: date.toISOString().slice(0, 10),
+      requestedUrl: url,
+      utcStartedAt: isoUtcNow(),
+    })
+  );
+
+  try {
+    const mass =
+      "type" in check && check.type
+        ? await usccb.getMass(date, check.type, { timeoutMs: 30_000 })
+        : await usccb.getMassFromDate(date, { timeoutMs: 30_000 });
+    validateMass(mass, check.id);
+    results[check.id] = {
+      ok: true,
+      durationMs: Date.now() - checkStarted,
+      title: mass.title,
+      url: mass.url,
+    };
+    console.log(
+      JSON.stringify({
+        event: "canary_check_success",
+        checkId: check.id,
+        title: mass.title,
+        resolvedUrl: mass.url,
+        durationMs: Date.now() - checkStarted,
+      })
+    );
+  } catch (error) {
+    results[check.id] = {
+      ok: false,
+      durationMs: Date.now() - checkStarted,
+      error: summarizeError(error),
+      url,
+    };
+    console.error(
+      JSON.stringify({
+        event: "canary_check_failure",
+        checkId: check.id,
+        requestedUrl: url,
+        durationMs: Date.now() - checkStarted,
+        error: summarizeError(error),
+      })
+    );
+  }
+}
+
+const failures = Object.entries(results).filter(([, result]) => !result.ok);
+const status = failures.length === 0 ? "UP" : "DOWN";
 
 console.log(
   JSON.stringify(
     {
-      status: "UP",
+      status,
       packageVersion: packageJson.version,
       nodeVersion: process.version,
-      fixedTitle: fixedMass.title,
-      currentDate: currentDate.toISOString().slice(0, 10),
-      currentTitle: currentMass.title,
+      utcFinishedAt: isoUtcNow(),
+      checks: results,
       durationMs: Date.now() - startedAt,
     },
     null,
     2
   )
 );
+
+if (failures.length > 0) {
+  process.exitCode = 1;
+}

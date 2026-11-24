@@ -60,23 +60,22 @@ export function parseMassHtml(
   return { date, type, url, title, sections };
 }
 
+type ReadingUnit = {
+  header: string;
+  address: cheerio.Cheerio<Element>;
+  contentBody: cheerio.Cheerio<Element>;
+};
+
 function getSections($: cheerio.CheerioAPI): Section[] {
   const sections: Section[] = [];
   let prevExpectsChildren = false;
 
-  for (const container of $(".container").toArray()) {
-    const name = $(container).find(".name").first();
-    if (!name.length) continue;
+  for (const unit of collectReadingUnits($)) {
+    const header = unit.header;
 
-    const header = cleanText(name.text()).trim();
-    if (!header) continue;
-
-    const address = $(container).find(".address").first();
-    const contentBody = $(container).find(".content-body").first();
-
-    let verses = address.length ? getVerses($, address) : [];
-    if (verses.length === 0 && address.length) {
-      const addrText = cleanText(address.text()).trim();
+    let verses = unit.address.length ? getVerses($, unit.address) : [];
+    if (verses.length === 0 && unit.address.length) {
+      const addrText = cleanText(unit.address.text()).trim();
       if (addrText) {
         const bookDict = getBookFromVerse("", addrText);
         verses = [{ text: addrText, link: "", book: bookDict?.name ?? null }];
@@ -87,7 +86,8 @@ function getSections($: cheerio.CheerioAPI): Section[] {
       (v) => v.text.trim().length > 0 || v.link.trim().length > 0
     );
     const hasBodyText =
-      contentBody.length > 0 && cleanText(contentBody.text()).trim().length > 0;
+      unit.contentBody.length > 0 &&
+      cleanText(unit.contentBody.text()).trim().length > 0;
     if (verses.length === 0 && !hasBodyText) {
       continue;
     }
@@ -101,7 +101,7 @@ function getSections($: cheerio.CheerioAPI): Section[] {
 
     let section: Section | null = null;
     let expectsChildren = false;
-    for (const reading of getReadings($, contentBody, verses)) {
+    for (const reading of getReadings($, unit.contentBody, verses)) {
       if (section === null) {
         const orMatch = OR_PATTERN.exec(reading.text);
         if (orMatch) {
@@ -145,6 +145,131 @@ function getSections($: cheerio.CheerioAPI): Section[] {
   }
 
   return sections;
+}
+
+const USCCB_BIBLE_CITATION_PATTERN = /bible\.usccb\.org\/bible\//i;
+
+function collectReadingUnits($: cheerio.CheerioAPI): ReadingUnit[] {
+  const contentHeaders = collectContentHeaders($);
+  if (contentHeaders.length > 0) {
+    return contentHeaders
+      .map((headerEl) => readingUnitFromContentHeader($, $(headerEl)))
+      .filter((unit): unit is ReadingUnit => unit !== null);
+  }
+
+  const units: ReadingUnit[] = [];
+  for (const container of $(".container").toArray()) {
+    const unit = readingUnitFromContainer($, $(container));
+    if (unit) units.push(unit);
+  }
+  return units;
+}
+
+function collectContentHeaders($: cheerio.CheerioAPI): Element[] {
+  const lectionaryHeaders = $(".wr-block.b-verse .content-header").toArray();
+  if (lectionaryHeaders.length > 0) {
+    return lectionaryHeaders;
+  }
+
+  return $(".content-header")
+    .toArray()
+    .filter((headerEl) => isReadingContentHeader($, $(headerEl)));
+}
+
+function isReadingContentHeader(
+  $: cheerio.CheerioAPI,
+  headerBlock: cheerio.Cheerio<Element>
+): boolean {
+  const name = headerBlock.find(".name").first();
+  if (!name.length || !cleanText(name.text()).trim()) {
+    return false;
+  }
+
+  const address = headerBlock.find(".address").first();
+  if (!address.length) {
+    return false;
+  }
+
+  const hasUsccbCitationLink = address
+    .find("a[href]")
+    .toArray()
+    .some((anchor) =>
+      USCCB_BIBLE_CITATION_PATTERN.test(($(anchor).attr("href") ?? "").trim())
+    );
+  if (hasUsccbCitationLink) {
+    return true;
+  }
+
+  const addrText = cleanText(address.text()).trim();
+  if (!addrText) {
+    return false;
+  }
+
+  return getBookFromVerse("", addrText) !== null;
+}
+
+function readingUnitFromContentHeader(
+  $: cheerio.CheerioAPI,
+  headerBlock: cheerio.Cheerio<Element>
+): ReadingUnit | null {
+  const name = headerBlock.find(".name").first();
+  if (!name.length) return null;
+
+  const header = cleanText(name.text()).trim();
+  if (!header) return null;
+
+  const address = headerBlock.find(".address").first();
+  const contentBody = resolveContentBody($, headerBlock);
+  return { header, address, contentBody };
+}
+
+function readingUnitFromContainer(
+  $: cheerio.CheerioAPI,
+  container: cheerio.Cheerio<Element>
+): ReadingUnit | null {
+  const name = container.find(".name").first();
+  if (!name.length) return null;
+
+  const header = cleanText(name.text()).trim();
+  if (!header) return null;
+
+  const address = container.find(".address").first();
+  const contentBody = container.find(".content-body").first();
+  return { header, address, contentBody };
+}
+
+/**
+ * USCCB serves reading text inside `.content-body` (older pages) or as sibling
+ * paragraphs immediately following `.content-header` (newer flat layout).
+ */
+function resolveContentBody(
+  $: cheerio.CheerioAPI,
+  headerBlock: cheerio.Cheerio<Element>
+): cheerio.Cheerio<Element> {
+  const boundedBody = headerBlock
+    .nextUntil(".content-header")
+    .filter(".content-body")
+    .first();
+  if (boundedBody.length > 0) {
+    return boundedBody;
+  }
+
+  const inlineParagraphs: Element[] = [];
+  for (const sibling of headerBlock.nextUntil(".content-header").toArray()) {
+    const el = $(sibling);
+    if (el.is(".content-body")) {
+      return el;
+    }
+    if (el.is("p")) {
+      inlineParagraphs.push(sibling);
+      continue;
+    }
+    for (const paragraph of el.find("p").toArray()) {
+      inlineParagraphs.push(paragraph);
+    }
+  }
+
+  return $(inlineParagraphs);
 }
 
 function getVerses(
@@ -206,7 +331,7 @@ function* getRawReadings(
   let lines: string[] = [];
   let verses = [...initialVerses];
 
-  for (const paragraph of contentBody.find("p").toArray()) {
+  for (const paragraph of contentParagraphs($, contentBody)) {
     const txt = getElementText($, paragraph).trim();
     if (OR_PATTERN.test(txt.trim())) {
       yield [verses, lines];
@@ -227,6 +352,17 @@ function* getRawReadings(
   }
 
   yield [verses, lines];
+}
+
+function contentParagraphs(
+  $: cheerio.CheerioAPI,
+  contentBody: cheerio.Cheerio<Element>
+): Element[] {
+  const nested = contentBody.find("p").toArray();
+  if (nested.length > 0) {
+    return nested;
+  }
+  return contentBody.filter("p").toArray();
 }
 
 function getElementText($: cheerio.CheerioAPI, element: Element): string {

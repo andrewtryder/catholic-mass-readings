@@ -330,6 +330,171 @@ describe("Liturgical seasons and special celebrations", () => {
     ).toThrow(USCCBParseError);
   });
 
+  it("parses flat paragraph layout without .content-body wrappers", () => {
+    const html = readFileSync(
+      join(dataDir, "mass-flat-paragraphs.html"),
+      "utf-8"
+    );
+    const mass = usccb.parseMass(
+      html,
+      "https://bible.usccb.org/bible/readings/080625.cfm",
+      parseIsoDate("2025-08-06"),
+      MassType.DEFAULT
+    );
+
+    expect(mass.title).toBe("Feast of the Transfiguration of the Lord");
+    expect(mass.sections.map((s) => s.type)).toEqual([
+      SectionType.READING,
+      SectionType.PSALM,
+      SectionType.READING,
+      SectionType.ALLELUIA,
+      SectionType.GOSPEL,
+    ]);
+    expect(mass.sections.map((s) => s.header.trim())).toEqual([
+      "Reading 1",
+      "Responsorial Psalm",
+      "Reading 2",
+      "Alleluia",
+      "Gospel",
+    ]);
+    expect(mass.sections[0].readings[0].text).toContain("As I watched");
+    expect(mass.sections[0].readings[0].text).toContain(
+      "His dominion is an everlasting dominion"
+    );
+    expect(mass.sections[0].readings[0].verses[0]).toMatchObject({
+      text: "Daniel 7:9-10, 13-14",
+      book: "Daniel",
+    });
+    expect(mass.sections[1].readings[0].text).toContain(
+      "The LORD is king; let the earth rejoice"
+    );
+    expect(mass.sections[2].readings[0].verses[0].book).toBe("2 Peter");
+    expect(mass.sections[4].readings[0].verses[0].book).toBe("Matthew");
+    expect(mass.sections[4].readings[0].text).toContain("transfigured");
+  });
+
+  it("keeps reading text scoped to the preceding content-header", () => {
+    const html = `<!DOCTYPE html>
+<html>
+  <head><title>Boundary Test Mass | USCCB</title></head>
+  <body>
+    <div class="wr-block b-verse bg-white padding-bottom-m">
+      <div class="container">
+        <div class="innerblock">
+          <header class="content-header">
+            <h3 class="name">Reading 1</h3>
+            <p class="address"><a href="https://bible.usccb.org/bible/genesis/1?1">Gen 1:1-5</a></p>
+          </header>
+          <p>Genesis opening paragraph with enough text for validation.</p>
+          <p>Genesis closing paragraph continues the same reading section.</p>
+          <header class="content-header">
+            <h3 class="name">Gospel</h3>
+            <p class="address"><a href="https://bible.usccb.org/bible/john/1?1">Jn 1:1</a></p>
+          </header>
+          <p>Gospel text belongs here and must not leak into Reading 1.</p>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>`;
+
+    const mass = usccb.parseMass(
+      html,
+      "https://bible.usccb.org/bible/readings/010125.cfm",
+      parseIsoDate("2025-01-01"),
+      MassType.DEFAULT
+    );
+
+    expect(mass.sections).toHaveLength(2);
+    expect(mass.sections[0].readings[0].text).toContain("Genesis opening");
+    expect(mass.sections[0].readings[0].text).toContain("Genesis closing");
+    expect(mass.sections[0].readings[0].text).not.toContain("Gospel text");
+    expect(mass.sections[1].readings[0].text).toContain("Gospel text");
+  });
+
+  it("ignores unrelated content-header elements outside the lectionary block", () => {
+    const html = `<!DOCTYPE html>
+<html>
+  <head><title>Scoped Header Test | USCCB</title></head>
+  <body>
+    <header class="content-header">
+      <h3 class="name">Subscribe to Newsletter</h3>
+      <p class="address"><a href="https://example.com">Subscribe</a></p>
+    </header>
+    <p>Marketing content that must not become a reading.</p>
+    <div class="wr-block b-verse bg-white padding-bottom-m">
+      <div class="container">
+        <div class="innerblock">
+          <header class="content-header">
+            <h3 class="name">Reading 1</h3>
+            <p class="address"><a href="https://bible.usccb.org/bible/genesis/1?1">Gen 1:1</a></p>
+          </header>
+          <p>In the beginning God created the heavens and the earth for us.</p>
+          <header class="content-header">
+            <h3 class="name">Gospel</h3>
+            <p class="address"><a href="https://bible.usccb.org/bible/john/1?1">Jn 1:1</a></p>
+          </header>
+          <p>In the beginning was the Word, and the Word was with God always.</p>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>`;
+
+    const mass = usccb.parseMass(
+      html,
+      "https://bible.usccb.org/bible/readings/010225.cfm",
+      parseIsoDate("2025-01-02"),
+      MassType.DEFAULT
+    );
+
+    expect(mass.sections).toHaveLength(2);
+    expect(mass.sections[0].header).toBe("Reading 1");
+    expect(mass.sections[0].readings[0].text).not.toContain(
+      "Marketing content"
+    );
+    expect(mass.sections[1].header).toBe("Gospel");
+  });
+
+  it("uses validated content-header fallback when wr-block wrappers are absent", () => {
+    const html = `<!DOCTYPE html>
+<html>
+  <head><title>Innerblock Fallback | USCCB</title></head>
+  <body>
+    <header class="content-header">
+      <h3 class="name">Site Navigation</h3>
+      <p class="address"><a href="https://example.com/about">About</a></p>
+    </header>
+    <div class="container">
+      <div class="innerblock">
+        <header class="content-header">
+          <h3 class="name">Reading 1</h3>
+          <p class="address"><a href="https://bible.usccb.org/bible/genesis/1?1">Gen 1:1-5</a></p>
+        </header>
+        <p>In the beginning God created the heavens and the earth with order.</p>
+        <header class="content-header">
+          <h3 class="name">Gospel</h3>
+          <p class="address"><a href="https://bible.usccb.org/bible/john/1?1">Jn 1:1</a></p>
+        </header>
+        <p>In the beginning was the Word, and the Word was with God forever.</p>
+      </div>
+    </div>
+  </body>
+</html>`;
+
+    const mass = usccb.parseMass(
+      html,
+      "https://bible.usccb.org/bible/readings/010325.cfm",
+      parseIsoDate("2025-01-03"),
+      MassType.DEFAULT
+    );
+
+    expect(mass.sections).toHaveLength(2);
+    expect(mass.sections[0].header).toBe("Reading 1");
+    expect(mass.sections[0].readings[0].text).toContain("In the beginning God");
+    expect(mass.sections[1].header).toBe("Gospel");
+  });
+
   it("parses authentic Lenten Sunday HTML snapshot with Verse Before the Gospel", () => {
     const html = readFileSync(join(dataDir, "lent-first-sunday.html"), "utf-8");
     const mass = usccb.parseMass(

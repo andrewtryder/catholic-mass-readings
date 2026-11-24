@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1](https://github.com/andrewtryder/catholic-mass-readings/compare/v1.0.0...v1.0.1) (2026-11-24)
+
+
+### Bug Fixes
+
+* **parser:** handle usccb flat paragraph reading layout ([4959ca0](https://github.com/andrewtryder/catholic-mass-readings/commit/4959ca0b8c8cbf6a3f156b372e0fca4e46ce749d))
+
 ## [1.0.0](https://github.com/andrewtryder/catholic-mass-readings/compare/v0.5.6...v1.0.0) (2026-11-14)
 
 

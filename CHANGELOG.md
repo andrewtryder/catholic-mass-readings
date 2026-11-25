@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.2](https://github.com/andrewtryder/catholic-mass-readings/compare/v1.0.1...v1.0.2) (2026-11-25)
+
+
+### Continuous Integration & Tooling Compatibility
+
+* **circleci:** disable healthchecks for daily canary ([b270b97](https://github.com/andrewtryder/catholic-mass-readings/commit/b270b977d940654d1ec640efa0bc5fb52c3bb5dd))
+* **docs:** harden github pages deployment workflow ([b0ab5cc](https://github.com/andrewtryder/catholic-mass-readings/commit/b0ab5ccb18c8dcc9b1d41a63458c137f61cfcc60))
+
 ## [1.0.1](https://github.com/andrewtryder/catholic-mass-readings/compare/v1.0.0...v1.0.1) (2026-11-24)
 
 

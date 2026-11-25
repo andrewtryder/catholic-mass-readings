@@ -1,0 +1,50 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 4
+    groups:
+      npm-non-major:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+    ignore:
+      - dependency-name: "@types/node"
+        update-types:
+          - version-update:semver-major
+      - dependency-name: "@types/node"
+        versions:
+          - ">=23.0.0"
+      - dependency-name: commander
+        versions:
+          - ">=15.0.0"
+      - dependency-name: "@commitlint/cli"
+        versions:
+          - ">=21.0.0"
+      - dependency-name: "@commitlint/config-conventional"
+        versions:
+          - ">=21.0.0"
+      - dependency-name: lint-staged
+        versions:
+          - ">=17.0.0"
+      - dependency-name: typescript
+        versions:
+          - ">=6.1.0"
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      github-actions-non-major:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch

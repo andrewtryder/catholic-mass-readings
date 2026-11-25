@@ -130,9 +130,9 @@ After this secret exists, Release PRs are opened/updated under your account and 
 
 Until the secret is set, release-please will fail on the next `main` push. Stale open Release PRs (for example `chore(main): release …` from `github-actions[bot]`) still need a one-time manual **Approve workflow runs** in the GitHub UI, or close them and let release-please open a fresh PR after the secret is configured.
 
-### Renovate
+### Dependabot
 
-Install the [Renovate GitHub App](https://github.com/apps/renovate) on the repository (configured in `renovate.json`).
+Version updates are configured in [`.github/dependabot.yml`](.github/dependabot.yml). After it is on `main`, confirm under **Insights → Dependency graph → Dependabot** that npm and GitHub Actions updates are enabled (security updates are already on at the repository level).
 
 ## 4. Release flow
 
